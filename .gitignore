@@ -1,0 +1,25 @@
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Binários e Pacotes Pesados (Não versionar instaladores no Git)
+*.intunewin
+*.msi
+*.exe
+*.zip
+packages/**/binaries/
+packages/**/temp/
+
+# Logs e Arquivos Temporários de Teste
+*.log
+logs/
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
