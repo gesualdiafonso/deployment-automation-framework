@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "applications": [
+    {
+      "id": "google-chrome",
+      "name": "Google Chrome",
+      "version": "stable",
+      "source": {
+        "type": "winget",
+        "package_id": "Google.Chrome"
+      },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/browsers/google-chrome/Deploy-Application.ps1"
+      }
+    }
+  ]
+}
