@@ -58,6 +58,7 @@
               "type": "string",
               "enum": [
                 "winget",
+                "msstore",
                 "direct",
                 "local"
               ]

@@ -4,14 +4,211 @@
     {
       "id": "google-chrome",
       "name": "Google Chrome",
-      "version": "stable",
-      "source": {
-        "type": "winget",
-        "package_id": "Google.Chrome"
-      },
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Google.Chrome" },
       "deployment": {
         "type": "psadt",
         "entry_point": "packages/browsers/google-chrome/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "mozilla-firefox",
+      "name": "Mozilla Firefox",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Mozilla.Firefox" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/browsers/mozilla-firefox/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "microsoft-office",
+      "name": "Microsoft 365 Apps",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Microsoft.Office" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/productivity/microsoft-office/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp",
+      "version": "latest",
+      "source": { "type": "msstore", "package_id": "9NKSQGP7F2NH" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/communication/whatsapp/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "affinity",
+      "name": "Affinity",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Canva.Affinity" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/design/affinity/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "visual-studio-code",
+      "name": "Visual Studio Code",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Microsoft.VisualStudioCode" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/development/visual-studio-code/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Figma.Figma" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/design/figma/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "postman",
+      "name": "Postman",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Postman.Postman" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/development/postman/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Spotify.Spotify" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/media/spotify/Deploy-Application.ps1"
+      }
+    },
+        {
+      "id": "git",
+      "name": "Git",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Git.Git" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/development/git/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "github-desktop",
+      "name": "GitHub Desktop",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "GitHub.GitHubDesktop" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/development/github-desktop/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "nodejs-lts",
+      "name": "Node.js LTS",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "OpenJS.NodeJS.LTS" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/development/nodejs-lts/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "python-3-12",
+      "name": "Python 3.12",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Python.Python.3.12" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/development/python-3-12/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "powershell-7",
+      "name": "PowerShell 7",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Microsoft.PowerShell" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/development/powershell-7/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "inkscape",
+      "name": "Inkscape",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Inkscape.Inkscape" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/design/inkscape/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "gimp",
+      "name": "GIMP",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "GIMP.GIMP.3" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/design/gimp/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "SlackTechnologies.Slack" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/communication/slack/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "zoom",
+      "name": "Zoom Workplace",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Zoom.Zoom" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/communication/zoom/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "Notion.Notion" },
+      "deployment": {
+        "type": "psadt",
+        "entry_point": "packages/productivity/notion/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "obs-studio",
+      "name": "OBS Studio",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "OBSProject.OBSStudio" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/media/obs-studio/Deploy-Application.ps1"
+      }
+    },
+    {
+      "id": "7zip",
+      "name": "7-Zip",
+      "version": "latest",
+      "source": { "type": "winget", "package_id": "7zip.7zip" },
+      "deployment": {
+        "type": "powershell",
+        "entry_point": "packages/utilities/7zip/Deploy-Application.ps1"
       }
     }
   ]
