@@ -31,7 +31,9 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path src, tests/powershell -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $results = foreach ($path in 'src', 'tests/powershell') {
+              Invoke-ScriptAnalyzer -Path $path -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          }
           if ($results) {
               $results | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize -Wrap | Out-String -Width 200
               throw "PSScriptAnalyzer found $(@($results).Count) issue(s)."
