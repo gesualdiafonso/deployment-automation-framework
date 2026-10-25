@@ -45,3 +45,19 @@ def test_duplicate_application_ids_are_rejected():
     errors = validate_catalog_data(catalog, schema)
 
     assert any("duplicate application ID" in error for error in errors)
+    
+def test_unsafe_package_id_is_rejected():
+    catalog, schema = load_catalog_and_schema()
+    catalog["applications"][0]["source"]["package_id"] = "Vendor.App; calc"
+
+    errors = validate_catalog_data(catalog, schema)
+
+    assert any("package_id" in error for error in errors)
+    
+def test_unsafe_version_is_rejected():
+    catalog, schema = load_catalog_and_schema()
+    catalog["applications"][0]["version"] = "1.0 --force"
+
+    errors = validate_catalog_data(catalog, schema)
+
+    assert any("version" in error for error in errors)

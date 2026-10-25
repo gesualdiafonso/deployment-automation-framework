@@ -41,7 +41,7 @@ Describe 'Get-DeployForgeApplication' {
 
     It 'throws for an unknown id' {
         { Get-DeployForgeApplication -Id 'does-not-exist' } |
-            Should -Throw -ExpectedMessage "*was not found in the catalog*"
+            Should -Throw -ExpectedMessage '*was not found in the catalog*'
     }
 
     It 'throws when the catalog file is missing' {
@@ -51,12 +51,12 @@ Describe 'Get-DeployForgeApplication' {
 }
 
 Describe 'Get-DeployForgeDeploymentPlan' {
-    It 'builds a winget command' {
+    It 'builds a silent winget command' {
         $root = Build-TestRepository -Applications @(Build-TestApp)
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.Supported | Should -BeTrue
-        $plan.Command | Should -Be 'winget install --id Vendor.App --exact --source winget --accept-package-agreements --accept-source-agreements'
+        $plan.Command | Should -Be 'winget install --id Vendor.App --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'
     }
 
     It 'uses the msstore source for Store packages' {
@@ -104,7 +104,8 @@ Describe 'Get-DeployForgeDeploymentPlan' {
     }
 
     It 'rejects an absolute entry_point' {
-        $root = Build-TestRepository -Applications @(Build-TestApp -EntryPoint 'C:\Windows\System32\cmd.exe')
+        $absolute = if ($IsWindows) { 'C:\Windows\System32\cmd.exe' } else { '/usr/bin/env' }
+        $root = Build-TestRepository -Applications @(Build-TestApp -EntryPoint $absolute)
 
         { Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root } |
             Should -Throw -ExpectedMessage '*relative path*'
@@ -126,14 +127,99 @@ Describe 'Get-DeployForgeDeploymentPlan' {
 }
 
 Describe 'Invoke-DeployForgeDeployment' {
-    It 'skips execution with -WhatIf' {
-        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -WhatIf
-        $result.Status | Should -Be 'Skipped'
+    BeforeEach {
+        # Default: application not installed (winget list exit code 0x8A150014) and install succeeds.
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
+            [pscustomobject]@{ ExitCode = -1978335212; Output = @() }
+        }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'install' } -MockWith {
+            [pscustomobject]@{ ExitCode = 0; Output = @('Successfully installed') }
+        }
     }
 
-    It 'makes no changes without -WhatIf in this version' {
-        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -Confirm:$false -WarningAction SilentlyContinue
-        $result.Status | Should -Be 'NotExecuted'
+    It 'returns DryRun with -WhatIf and runs nothing' {
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -WhatIf
+
+        $result.Status | Should -Be 'DryRun'
+        $result.LogPath | Should -BeNullOrEmpty
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+        Test-Path -LiteralPath $logDir | Should -BeFalse
+    }
+
+    It 'installs an application that is not installed' {
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
+
+        $result.Status | Should -Be 'Installed'
+        $result.ExitCode | Should -Be 0
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 1 -Exactly -ParameterFilter { $Arguments[0] -eq 'install' }
+    }
+
+    It 'does not reinstall an application that is already installed' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
+            [pscustomobject]@{ ExitCode = 0; Output = @('Google Chrome') }
+        }
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
+
+        $result.Status | Should -Be 'AlreadyInstalled'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly -ParameterFilter { $Arguments[0] -eq 'install' }
+    }
+
+    It 'returns Failed when winget install exits with an error code' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'install' } -MockWith {
+            [pscustomobject]@{ ExitCode = 1; Output = @('Installer failed') }
+        }
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.ExitCode | Should -Be 1
+        $result.Message | Should -Match 'exit code 1'
+    }
+
+    It 'returns Failed without installing when detection fails unexpectedly' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
+            [pscustomobject]@{ ExitCode = 5; Output = @() }
+        }
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.Message | Should -Match 'winget list failed'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly -ParameterFilter { $Arguments[0] -eq 'install' }
+    }
+
+    It 'returns Failed when winget is not available' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
+            throw 'winget was not found on this machine.'
+        }
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.Message | Should -Match 'not found'
+    }
+
+    It 'writes a log file that records the outcome' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
+            [pscustomobject]@{ ExitCode = 0; Output = @('Google Chrome') }
+        }
+        $logDir = Join-Path $TestDrive 'logs'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
+
+        Test-Path -LiteralPath $result.LogPath | Should -BeTrue
+        $content = Get-Content -LiteralPath $result.LogPath -Raw
+        $content | Should -Match $result.OperationId
+        $content | Should -Match 'AlreadyInstalled'
     }
 
     It 'throws for an unknown application' {

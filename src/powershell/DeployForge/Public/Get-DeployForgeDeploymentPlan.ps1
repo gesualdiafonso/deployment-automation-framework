@@ -46,7 +46,8 @@ function Get-DeployForgeDeploymentPlan {
 
             $arguments = @(
                 'install', '--id', $packageId, '--exact', '--source', $sourceType,
-                '--accept-package-agreements', '--accept-source-agreements'
+                '--silent', '--accept-package-agreements', '--accept-source-agreements',
+                '--disable-interactivity'
             )
 
             if ($app.version -notin 'latest', 'stable') {
