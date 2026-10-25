@@ -254,7 +254,7 @@ Two GitHub Actions workflows run on pushes to `main` and `docs/**` branches, and
 | Workflow | Runner | Checks |
 |---|---|---|
 | `python-ci.yml` | `ubuntu-latest` | Catalog validation against the schema, then pytest |
-| `powershell-ci.yml` | `windows-latest` | PSScriptAnalyzer, then Pester tests for the DeployForge module |
+| `powershell-ci.yml` | `windows-latest` | PSScriptAnalyzer, then PSScriptAnalyzer, then Pester tests for the DeployForge module |
 
 Planned checks:
 
