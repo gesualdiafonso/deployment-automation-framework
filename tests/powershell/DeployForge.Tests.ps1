@@ -2,7 +2,7 @@ BeforeAll {
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
     Import-Module (Join-Path $script:RepoRoot 'src/powershell/DeployForge/DeployForge.psd1') -Force
 
-    function New-TestApp {
+    function Build-TestApp {
         param(
             [string]$Id = 'test-app',
             [string]$SourceType = 'winget',
@@ -19,7 +19,7 @@ BeforeAll {
         }
     }
 
-    function New-TestRepository {
+    function Build-TestRepository {
         param([Parameter(Mandatory)][object[]]$Applications)
         $root = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path (Join-Path $root 'packages') -Force | Out-Null
@@ -52,7 +52,7 @@ Describe 'Get-DeployForgeApplication' {
 
 Describe 'Get-DeployForgeDeploymentPlan' {
     It 'builds a winget command' {
-        $root = New-TestRepository -Applications @(New-TestApp)
+        $root = Build-TestRepository -Applications @(Build-TestApp)
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.Supported | Should -BeTrue
@@ -60,21 +60,21 @@ Describe 'Get-DeployForgeDeploymentPlan' {
     }
 
     It 'uses the msstore source for Store packages' {
-        $root = New-TestRepository -Applications @(New-TestApp -SourceType 'msstore' -PackageId '9NKSQGP7F2NH')
+        $root = Build-TestRepository -Applications @(Build-TestApp -SourceType 'msstore' -PackageId '9NKSQGP7F2NH')
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.Command | Should -BeLike '*--id 9NKSQGP7F2NH*--source msstore*'
     }
 
     It 'pins the version when it is not latest or stable' {
-        $root = New-TestRepository -Applications @(New-TestApp -Version '1.2.3')
+        $root = Build-TestRepository -Applications @(Build-TestApp -Version '1.2.3')
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.Command | Should -BeLike '*--version 1.2.3'
     }
 
     It 'notes a missing entry_point without failing' {
-        $root = New-TestRepository -Applications @(New-TestApp)
+        $root = Build-TestRepository -Applications @(Build-TestApp)
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.EntryPointExists | Should -BeFalse
@@ -82,14 +82,14 @@ Describe 'Get-DeployForgeDeploymentPlan' {
     }
 
     It 'detects an existing entry_point' {
-        $root = New-TestRepository -Applications @(New-TestApp)
+        $root = Build-TestRepository -Applications @(Build-TestApp)
         New-Item -ItemType File -Force -Path (Join-Path $root 'packages/test/Deploy-Application.ps1') | Out-Null
 
         (Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root).EntryPointExists | Should -BeTrue
     }
 
     It 'marks unsupported source types instead of building a command' {
-        $root = New-TestRepository -Applications @(New-TestApp -SourceType 'direct')
+        $root = Build-TestRepository -Applications @(Build-TestApp -SourceType 'direct')
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.Supported | Should -BeFalse
@@ -97,21 +97,21 @@ Describe 'Get-DeployForgeDeploymentPlan' {
     }
 
     It 'rejects an entry_point that escapes the repository' {
-        $root = New-TestRepository -Applications @(New-TestApp -EntryPoint '../outside.ps1')
+        $root = Build-TestRepository -Applications @(Build-TestApp -EntryPoint '../outside.ps1')
 
         { Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root } |
             Should -Throw -ExpectedMessage '*outside the repository*'
     }
 
     It 'rejects an absolute entry_point' {
-        $root = New-TestRepository -Applications @(New-TestApp -EntryPoint 'C:\Windows\System32\cmd.exe')
+        $root = Build-TestRepository -Applications @(Build-TestApp -EntryPoint 'C:\Windows\System32\cmd.exe')
 
         { Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root } |
             Should -Throw -ExpectedMessage '*relative path*'
     }
 
     It 'rejects a package_id with unsafe characters' {
-        $root = New-TestRepository -Applications @(New-TestApp -PackageId 'Vendor.App; calc')
+        $root = Build-TestRepository -Applications @(Build-TestApp -PackageId 'Vendor.App; calc')
 
         { Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root } |
             Should -Throw -ExpectedMessage '*unsupported characters*'
@@ -142,7 +142,7 @@ Describe 'Invoke-DeployForgeDeployment' {
     }
 
     It 'throws for an unsupported source type' {
-        $root = New-TestRepository -Applications @(New-TestApp -SourceType 'direct')
+        $root = Build-TestRepository -Applications @(Build-TestApp -SourceType 'direct')
 
         { Invoke-DeployForgeDeployment -Id 'test-app' -RepositoryRoot $root -WhatIf } |
             Should -Throw -ExpectedMessage '*not supported*'
