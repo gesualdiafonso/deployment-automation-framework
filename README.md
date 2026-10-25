@@ -99,7 +99,7 @@ The diagram describes the intended architecture; it does not imply that every co
 | PSAppDeployToolkit (PSADT) | Standardized application deployment workflows | Planned |
 | FastAPI | REST endpoints, request validation, and API documentation | Planned |
 | Microsoft Graph API / OAuth 2.0 | Integration with Microsoft cloud management services | Planned |
-| PSScriptAnalyzer | PowerShell static analysis | Planned |
+| PSScriptAnalyzer | PowerShell static analysis | In use |
 
 ## Core Components
 
@@ -254,11 +254,10 @@ Two GitHub Actions workflows run on pushes to `main` and `docs/**` branches, and
 | Workflow | Runner | Checks |
 |---|---|---|
 | `python-ci.yml` | `ubuntu-latest` | Catalog validation against the schema, then pytest |
-| `powershell-ci.yml` | `windows-latest` | Pester tests for the DeployForge module |
+| `powershell-ci.yml` | `windows-latest` | PSScriptAnalyzer, then Pester tests for the DeployForge module |
 
 Planned checks:
 
-- PowerShell static analysis with PSScriptAnalyzer.
 - API schema and request-validation tests.
 - Dependency and secret scanning.
 
@@ -394,7 +393,7 @@ The project uses a layered testing strategy. Some layers are in place and others
 | Unit tests (Python) | Catalog schema, required fields, duplicate IDs | In place |
 | Unit tests (PowerShell) | Plan building, source types, path and package ID safety, `-WhatIf` behavior, every catalog application resolving to a supported plan | In place |
 | CI validation | Automated checks on every proposed change | In place |
-| Static analysis | PowerShell and Python code quality | Planned |
+| Static analysis | PowerShell code quality with PSScriptAnalyzer (Python linting planned) | In place (PowerShell) |
 | API tests | HTTP status codes, schemas, and authorization | Planned |
 | Package tests | Installation, detection, upgrade, and uninstall | Planned |
 | Integration tests | API-to-orchestrator and Graph connectivity | Planned |
@@ -408,7 +407,7 @@ Success criteria should be measurable: for example, passing test suites, correct
 - [x] Implement and test the application catalog schema.
 - [x] Expand the catalog to 21 applications across browsers, productivity, communication, design, development, media, and utilities.
 - [x] Build the DeployForge dry-run engine (plan building and `-WhatIf`) with Pester tests.
-- [ ] Add PSScriptAnalyzer to the PowerShell CI workflow.
+- [x] Add PSScriptAnalyzer to the PowerShell CI workflow.
 - [ ] Implement real installation through WinGet with idempotency checks, structured results, and per-run logs, tested in Windows Sandbox.
 - [ ] Create a reusable PSAppDeployToolkit package template.
 - [ ] Develop one fully tested Windows application package.
