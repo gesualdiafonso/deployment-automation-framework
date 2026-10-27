@@ -1,0 +1,28 @@
+# Normalise line endings; Git decides text vs binary by content by default.
+* text=auto
+
+# PowerShell: CRLF in the working tree keeps Windows PowerShell 5.1 and editors happy.
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# Files that must stay LF everywhere
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.sh   text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+
+# Binary files: never touch
+*.zip  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
