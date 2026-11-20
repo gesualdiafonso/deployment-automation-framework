@@ -51,12 +51,29 @@ Describe 'Get-DeployForgeApplication' {
 }
 
 Describe 'Get-DeployForgeDeploymentPlan' {
-    It 'builds a silent winget command' {
+    It 'builds a silent winget install command by default' {
         $root = Build-TestRepository -Applications @(Build-TestApp)
         $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root
 
         $plan.Supported | Should -BeTrue
+        $plan.Action | Should -Be 'Install'
         $plan.Command | Should -Be 'winget install --id Vendor.App --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity'
+    }
+
+    It 'builds a silent winget uninstall command' {
+        $root = Build-TestRepository -Applications @(Build-TestApp)
+        $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -Action Uninstall -RepositoryRoot $root
+
+        $plan.Supported | Should -BeTrue
+        $plan.Action | Should -Be 'Uninstall'
+        $plan.Command | Should -Be 'winget uninstall --id Vendor.App --exact --source winget --silent --accept-source-agreements --disable-interactivity'
+    }
+
+    It 'ignores a pinned version when uninstalling' {
+        $root = Build-TestRepository -Applications @(Build-TestApp -Version '1.2.3')
+        $plan = Get-DeployForgeDeploymentPlan -Id 'test-app' -Action Uninstall -RepositoryRoot $root
+
+        $plan.Command | Should -Not -BeLike '*--version*'
     }
 
     It 'uses the msstore source for Store packages' {
@@ -118,108 +135,219 @@ Describe 'Get-DeployForgeDeploymentPlan' {
             Should -Throw -ExpectedMessage '*unsupported characters*'
     }
 
-    It 'builds a supported plan for every application in the real catalog' {
+    It 'builds a supported install and uninstall plan for every application in the real catalog' {
         foreach ($app in Get-DeployForgeApplication) {
-            $plan = Get-DeployForgeDeploymentPlan -Id $app.id
-            $plan.Supported | Should -BeTrue -Because "$($app.id) must be deployable"
+            (Get-DeployForgeDeploymentPlan -Id $app.id).Supported | Should -BeTrue -Because "$($app.id) must be installable"
+            (Get-DeployForgeDeploymentPlan -Id $app.id -Action Uninstall).Supported | Should -BeTrue -Because "$($app.id) must be uninstallable"
         }
     }
 }
 
-Describe 'Invoke-DeployForgeDeployment' {
-    BeforeEach {
-        # Default: application not installed (winget list exit code 0x8A150014) and install succeeds.
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
-            [pscustomobject]@{ ExitCode = -1978335212; Output = @() }
-        }
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'install' } -MockWith {
-            [pscustomobject]@{ ExitCode = 0; Output = @('Successfully installed') }
-        }
+Describe 'Test-DeployForgeApplicationInstalled' {
+    # winget exit code -1978335212 (0x8A150014) means "no installed package found".
+    It 'returns true when winget list succeeds' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('Vendor App') } }
+
+        InModuleScope DeployForge { Test-DeployForgeApplicationInstalled -PackageId 'Vendor.App' -Source winget } | Should -BeTrue
     }
 
-    It 'returns DryRun with -WhatIf and runs nothing' {
-        $logDir = Join-Path $TestDrive 'logs'
+    It 'returns false when winget finds no installed package' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = -1978335212; Output = @() } }
+
+        InModuleScope DeployForge { Test-DeployForgeApplicationInstalled -PackageId 'Vendor.App' -Source winget } | Should -BeFalse
+    }
+
+    It 'throws on an unexpected exit code' {
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 5; Output = @() } }
+
+        { InModuleScope DeployForge { Test-DeployForgeApplicationInstalled -PackageId 'Vendor.App' -Source winget } } |
+            Should -Throw -ExpectedMessage '*winget list failed*'
+    }
+}
+
+Describe 'Confirm-DeployForgeApplicationState' {
+    It 'returns true when the detected state matches the expected one' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+
+        InModuleScope DeployForge { Confirm-DeployForgeApplicationState -PackageId 'Vendor.App' -Source winget -Expected $true } | Should -BeTrue
+    }
+
+    It 'returns false when the detected state differs from the expected one' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+
+        InModuleScope DeployForge { Confirm-DeployForgeApplicationState -PackageId 'Vendor.App' -Source winget -Expected $false } | Should -BeFalse
+    }
+}
+
+# Every test below declares the mocks it needs, so no test depends on another mock overriding it.
+#   Test-DeployForgeApplicationInstalled   = detection before the operation
+#   Confirm-DeployForgeApplicationState    = verification after the operation
+#   Invoke-DeployForgeWinget               = the only function that calls winget
+Describe 'Invoke-DeployForgeDeployment' {
+    It 'returns DryRun with -WhatIf for an install and runs nothing' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-whatif-install'
 
         $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -WhatIf
 
         $result.Status | Should -Be 'DryRun'
         $result.LogPath | Should -BeNullOrEmpty
         Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+        Should -Invoke Test-DeployForgeApplicationInstalled -ModuleName DeployForge -Times 0 -Exactly
         Test-Path -LiteralPath $logDir | Should -BeFalse
     }
 
-    It 'installs an application that is not installed' {
-        $logDir = Join-Path $TestDrive 'logs'
+    It 'returns DryRun with -WhatIf for an uninstall and runs nothing' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $false }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-whatif-uninstall'
+
+        $result = Invoke-DeployForgeDeployment -Id '7zip' -Action Uninstall -LogDirectory $logDir -WhatIf
+
+        $result.Status | Should -Be 'DryRun'
+        $result.Command | Should -BeLike 'winget uninstall*'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+        Test-Path -LiteralPath $logDir | Should -BeFalse
+    }
+
+    It 'installs an application that is not installed and verifies it' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-install'
 
         $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
 
         $result.Status | Should -Be 'Installed'
+        $result.Action | Should -Be 'Install'
+        $result.Verified | Should -BeTrue
         $result.ExitCode | Should -Be 0
         Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 1 -Exactly -ParameterFilter { $Arguments[0] -eq 'install' }
+        Should -Invoke Confirm-DeployForgeApplicationState -ModuleName DeployForge -Times 1 -Exactly -ParameterFilter { $Expected -eq $true }
     }
 
     It 'does not reinstall an application that is already installed' {
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
-            [pscustomobject]@{ ExitCode = 0; Output = @('Google Chrome') }
-        }
-        $logDir = Join-Path $TestDrive 'logs'
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-already'
 
         $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
 
         $result.Status | Should -Be 'AlreadyInstalled'
-        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly -ParameterFilter { $Arguments[0] -eq 'install' }
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
     }
 
     It 'returns Failed when winget install exits with an error code' {
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'install' } -MockWith {
-            [pscustomobject]@{ ExitCode = 1; Output = @('Installer failed') }
-        }
-        $logDir = Join-Path $TestDrive 'logs'
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 1; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-install-failed'
 
         $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
 
         $result.Status | Should -Be 'Failed'
         $result.ExitCode | Should -Be 1
         $result.Message | Should -Match 'exit code 1'
+        Should -Invoke Confirm-DeployForgeApplicationState -ModuleName DeployForge -Times 0 -Exactly
     }
 
-    It 'returns Failed without installing when detection fails unexpectedly' {
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
-            [pscustomobject]@{ ExitCode = 5; Output = @() }
-        }
-        $logDir = Join-Path $TestDrive 'logs'
+    It 'returns Failed when winget install succeeds but the application is not detected afterwards' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $false }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-install-unverified'
 
         $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
 
         $result.Status | Should -Be 'Failed'
-        $result.Message | Should -Match 'winget list failed'
-        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly -ParameterFilter { $Arguments[0] -eq 'install' }
+        $result.Verified | Should -BeFalse
+        $result.Message | Should -Match 'verification failed'
     }
 
-    It 'returns Failed when winget is not available' {
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
-            throw 'winget was not found on this machine.'
-        }
-        $logDir = Join-Path $TestDrive 'logs'
+    It 'uninstalls an installed application and verifies it is gone' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-uninstall'
+
+        $result = Invoke-DeployForgeDeployment -Id '7zip' -Action Uninstall -LogDirectory $logDir -Confirm:$false
+
+        $result.Status | Should -Be 'Uninstalled'
+        $result.Action | Should -Be 'Uninstall'
+        $result.Verified | Should -BeTrue
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 1 -Exactly -ParameterFilter { $Arguments[0] -eq 'uninstall' }
+        Should -Invoke Confirm-DeployForgeApplicationState -ModuleName DeployForge -Times 1 -Exactly -ParameterFilter { $Expected -eq $false }
+    }
+
+    It 'does nothing when uninstalling an application that is not installed' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $false }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-notinstalled'
+
+        $result = Invoke-DeployForgeDeployment -Id '7zip' -Action Uninstall -LogDirectory $logDir -Confirm:$false
+
+        $result.Status | Should -Be 'NotInstalled'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+    }
+
+    It 'returns Failed when winget uninstall exits with an error code' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $false }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 1603; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-uninstall-failed'
+
+        $result = Invoke-DeployForgeDeployment -Id '7zip' -Action Uninstall -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.ExitCode | Should -Be 1603
+        $result.Message | Should -Match 'exit code 1603'
+    }
+
+    It 'returns Failed when winget uninstall succeeds but the application is still detected' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $false }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-uninstall-unverified'
+
+        $result = Invoke-DeployForgeDeployment -Id '7zip' -Action Uninstall -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.Verified | Should -BeFalse
+        $result.Message | Should -Match 'still detected'
+    }
+
+    It 'returns Failed without running winget when detection fails' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { throw 'winget was not found on this machine.' }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-detect-failed'
 
         $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
 
         $result.Status | Should -Be 'Failed'
         $result.Message | Should -Match 'not found'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
     }
 
-    It 'writes a log file that records the outcome' {
-        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -ParameterFilter { $Arguments[0] -eq 'list' } -MockWith {
-            [pscustomobject]@{ ExitCode = 0; Output = @('Google Chrome') }
-        }
-        $logDir = Join-Path $TestDrive 'logs'
+    It 'writes a log file that records the action and the outcome' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('winget output') } }
+        $logDir = Join-Path $TestDrive 'logs-content'
 
-        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
+        $result = Invoke-DeployForgeDeployment -Id '7zip' -Action Uninstall -LogDirectory $logDir -Confirm:$false
 
         Test-Path -LiteralPath $result.LogPath | Should -BeTrue
+        Split-Path $result.LogPath -Leaf | Should -BeLike '*-7zip-uninstall-*.log'
         $content = Get-Content -LiteralPath $result.LogPath -Raw
         $content | Should -Match $result.OperationId
-        $content | Should -Match 'AlreadyInstalled'
+        $content | Should -Match 'action Uninstall'
+        $content | Should -Match 'Result: Uninstalled'
     }
 
     It 'throws for an unknown application' {
@@ -232,5 +360,9 @@ Describe 'Invoke-DeployForgeDeployment' {
 
         { Invoke-DeployForgeDeployment -Id 'test-app' -RepositoryRoot $root -WhatIf } |
             Should -Throw -ExpectedMessage '*not supported*'
+    }
+
+    It 'rejects an unknown action' {
+        { Invoke-DeployForgeDeployment -Id 'google-chrome' -Action 'Repair' -WhatIf } | Should -Throw
     }
 }

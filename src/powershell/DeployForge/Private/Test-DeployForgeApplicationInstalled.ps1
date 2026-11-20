@@ -10,11 +10,11 @@ function Test-DeployForgeApplicationInstalled {
         [string]$Source
     )
 
-    # Exit code winget uses when no installed package matches (0x8A150014)
+    # Exit code winget uses when no installed package matches (0x8A150014).
     $noApplicationsFound = -1978335212
 
     $result = Invoke-DeployForgeWinget -Arguments @(
-        'list', '--id', $PackageID, '--exact', '--source', $Source,
+        'list', '--id', $PackageId, '--exact', '--source', $Source,
         '--accept-source-agreements', '--disable-interactivity'
     )
 
@@ -26,5 +26,5 @@ function Test-DeployForgeApplicationInstalled {
         return $false
     }
 
-    throw "Failed to check if application is installed: $($result.Output -join [Environment]::NewLine)"
+    throw "winget list failed with exit code $($result.ExitCode)."
 }

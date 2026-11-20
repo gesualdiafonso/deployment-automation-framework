@@ -13,5 +13,4 @@ function Write-DeployForgeLog {
 
     $timestamp = [DateTimeOffset]::UtcNow.ToString('o')
     Add-Content -LiteralPath $Path -Value "$timestamp [$Level] $Message" -Encoding utf8
-    )
 }

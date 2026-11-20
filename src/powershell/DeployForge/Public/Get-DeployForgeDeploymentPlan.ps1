@@ -1,15 +1,20 @@
 function Get-DeployForgeDeploymentPlan {
     <#
     .SYNOPSIS
-        Builds the deployment plan for a catalog application without executing anything.
+        Builds the plan for installing or uninstalling a catalog application without executing anything.
     .EXAMPLE
         Get-DeployForgeDeploymentPlan -Id google-chrome | Format-List
+    .EXAMPLE
+        Get-DeployForgeDeploymentPlan -Id 7zip -Action Uninstall
     #>
     [CmdletBinding()]
     [OutputType('DeployForge.DeploymentPlan')]
     param(
         [Parameter(Mandatory, Position = 0)]
         [string]$Id,
+
+        [ValidateSet('Install', 'Uninstall')]
+        [string]$Action = 'Install',
 
         [string]$RepositoryRoot = $script:DeployForgeRoot
     )
@@ -44,17 +49,25 @@ function Get-DeployForgeDeploymentPlan {
                 throw "package_id for '$Id' contains unsupported characters: $packageId"
             }
 
-            $arguments = @(
-                'install', '--id', $packageId, '--exact', '--source', $sourceType,
-                '--silent', '--accept-package-agreements', '--accept-source-agreements',
-                '--disable-interactivity'
-            )
+            if ($Action -eq 'Install') {
+                $arguments = @(
+                    'install', '--id', $packageId, '--exact', '--source', $sourceType,
+                    '--silent', '--accept-package-agreements', '--accept-source-agreements',
+                    '--disable-interactivity'
+                )
 
-            if ($app.version -notin 'latest', 'stable') {
-                if ($app.version -notmatch $safePattern) {
-                    throw "version for '$Id' contains unsupported characters: $($app.version)"
+                if ($app.version -notin 'latest', 'stable') {
+                    if ($app.version -notmatch $safePattern) {
+                        throw "version for '$Id' contains unsupported characters: $($app.version)"
+                    }
+                    $arguments += @('--version', $app.version)
                 }
-                $arguments += @('--version', $app.version)
+            }
+            else {
+                $arguments = @(
+                    'uninstall', '--id', $packageId, '--exact', '--source', $sourceType,
+                    '--silent', '--accept-source-agreements', '--disable-interactivity'
+                )
             }
 
             $supported = $true
@@ -73,6 +86,7 @@ function Get-DeployForgeDeploymentPlan {
         PSTypeName       = 'DeployForge.DeploymentPlan'
         Id               = $app.id
         Name             = $app.name
+        Action           = $Action
         Version          = $app.version
         SourceType       = $sourceType
         PackageId        = $packageId
