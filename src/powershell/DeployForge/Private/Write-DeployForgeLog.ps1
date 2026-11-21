@@ -12,5 +12,12 @@ function Write-DeployForgeLog {
     )
 
     $timestamp = [DateTimeOffset]::UtcNow.ToString('o')
-    Add-Content -LiteralPath $Path -Value "$timestamp [$Level] $Message" -Encoding utf8
+
+    # A log line that cannot be written must stop the caller: operations are never run unrecorded.
+    try {
+        Add-Content -LiteralPath $Path -Value "$timestamp [$Level] $Message" -Encoding utf8 -ErrorAction Stop
+    }
+    catch {
+        throw "Could not write the DeployForge log '$Path': $($_.Exception.Message)"
+    }
 }

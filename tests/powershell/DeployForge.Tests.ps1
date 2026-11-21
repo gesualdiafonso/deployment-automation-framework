@@ -44,6 +44,16 @@ Describe 'Get-DeployForgeApplication' {
             Should -Throw -ExpectedMessage '*was not found in the catalog*'
     }
 
+    It 'throws when an application ID appears more than once in the catalog' {
+        $root = Build-TestRepository -Applications @(
+            (Build-TestApp -PackageId 'Vendor.A'),
+            (Build-TestApp -PackageId 'Vendor.B')
+        )
+
+        { Get-DeployForgeApplication -Id 'test-app' -RepositoryRoot $root } |
+            Should -Throw -ExpectedMessage '*appears 2 times*'
+    }
+
     It 'throws when the catalog file is missing' {
         { Get-DeployForgeApplication -RepositoryRoot $TestDrive } |
             Should -Throw -ExpectedMessage '*Catalog not found*'
@@ -135,6 +145,21 @@ Describe 'Get-DeployForgeDeploymentPlan' {
             Should -Throw -ExpectedMessage '*unsupported characters*'
     }
 
+    It 'rejects <Field> when it is <Case>' -ForEach @(
+        @{ Field = 'source.package_id'; Case = 'an array of safe values'; Set = { param($a) $a.source.package_id = @('Vendor.A', 'Vendor.B') } }
+        @{ Field = 'version';           Case = 'a number';                Set = { param($a) $a.version = 2 } }
+        @{ Field = 'version';           Case = 'empty';                   Set = { param($a) $a.version = '' } }
+        @{ Field = 'source.type';       Case = 'an array';                Set = { param($a) $a.source.type = @('winget', 'msstore') } }
+        @{ Field = 'deployment.entry_point'; Case = 'an array';           Set = { param($a) $a.deployment.entry_point = @('a.ps1', 'b.ps1') } }
+    ) {
+        $app = Build-TestApp
+        & $Set $app
+        $root = Build-TestRepository -Applications @($app)
+
+        { Get-DeployForgeDeploymentPlan -Id 'test-app' -RepositoryRoot $root } |
+            Should -Throw -ExpectedMessage "$Field for 'test-app' must be a non-empty string."
+    }
+
     It 'builds a supported install and uninstall plan for every application in the real catalog' {
         foreach ($app in Get-DeployForgeApplication) {
             (Get-DeployForgeDeploymentPlan -Id $app.id).Supported | Should -BeTrue -Because "$($app.id) must be installable"
@@ -183,6 +208,15 @@ Describe 'Confirm-DeployForgeApplicationState' {
 #   Test-DeployForgeApplicationInstalled   = detection before the operation
 #   Confirm-DeployForgeApplicationState    = verification after the operation
 #   Invoke-DeployForgeWinget               = the only function that calls winget
+Describe 'Write-DeployForgeLog' {
+    It 'throws when the log file cannot be written' {
+        $path = Join-Path $TestDrive 'missing-dir/sub/x.log'
+        InModuleScope DeployForge -Parameters @{ Path = $path } {
+            { Write-DeployForgeLog -Path $Path -Message 'm' } | Should -Throw -ExpectedMessage '*Could not write the DeployForge log*'
+        }
+    }
+}
+
 Describe 'Invoke-DeployForgeDeployment' {
     It 'returns DryRun with -WhatIf for an install and runs nothing' {
         Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
@@ -348,6 +382,60 @@ Describe 'Invoke-DeployForgeDeployment' {
         $content | Should -Match $result.OperationId
         $content | Should -Match 'action Uninstall'
         $content | Should -Match 'Result: Uninstalled'
+    }
+
+    It 'records in the log whether the session is elevated' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @() } }
+        $logDir = Join-Path $TestDrive 'logs-elevation'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false
+
+        Get-Content -LiteralPath $result.LogPath -Raw | Should -Match 'Session elevated: (True|False|n/a)\.'
+    }
+
+    It 'returns Failed and runs nothing when the log directory cannot be created' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @() } }
+        $blocker = Join-Path $TestDrive 'log-dir-is-a-file'
+        Set-Content -LiteralPath $blocker -Value 'not a directory'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $blocker -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.LogPath | Should -BeNullOrEmpty
+        Should -Invoke Test-DeployForgeApplicationInstalled -ModuleName DeployForge -Times 0 -Exactly
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+    }
+
+    It 'returns Failed without running winget when the log cannot be written mid-operation' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @() } }
+        Mock Write-DeployForgeLog -ModuleName DeployForge -MockWith { }
+        Mock Write-DeployForgeLog -ModuleName DeployForge -ParameterFilter { $Message -like 'Detected state before*' } -MockWith { throw 'disk full' }
+        $logDir = Join-Path $TestDrive 'logs-midway'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Failed'
+        $result.Message | Should -Match 'disk full'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+    }
+
+    It 'still returns the result when only the final log line cannot be written' {
+        Mock Test-DeployForgeApplicationInstalled -ModuleName DeployForge -MockWith { $false }
+        Mock Confirm-DeployForgeApplicationState -ModuleName DeployForge -MockWith { $true }
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @() } }
+        Mock Write-DeployForgeLog -ModuleName DeployForge -MockWith { }
+        Mock Write-DeployForgeLog -ModuleName DeployForge -ParameterFilter { $Message -like 'Result:*' } -MockWith { throw 'disk full' }
+        $logDir = Join-Path $TestDrive 'logs-final-line'
+
+        $result = Invoke-DeployForgeDeployment -Id 'google-chrome' -LogDirectory $logDir -Confirm:$false -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $result.Status | Should -Be 'Installed'
+        $warnings | Should -Not -BeNullOrEmpty
     }
 
     It 'throws for an unknown application' {

@@ -21,11 +21,15 @@ function Get-DeployForgeApplication {
         return $applications
     }
 
-    $match = $applications | Where-Object { $_.id -eq $Id }
+    $match = @($applications | Where-Object { $_.id -eq $Id })
 
-    if (-not $match) {
+    if ($match.Count -eq 0) {
         throw "Application '$Id' was not found in the catalog."
     }
 
-    $match
+    if ($match.Count -gt 1) {
+        throw "Application ID '$Id' appears $($match.Count) times in the catalog; run tools/validate_catalog.py."
+    }
+
+    $match[0]
 }

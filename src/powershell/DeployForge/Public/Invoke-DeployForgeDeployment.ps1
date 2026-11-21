@@ -57,13 +57,23 @@ function Invoke-DeployForgeDeployment {
     $logPath     = $null
 
     if ($PSCmdlet.ShouldProcess($plan.Name, $plan.Command)) {
-        $null = New-Item -ItemType Directory -Path $LogDirectory -Force
         $stamp   = $startedAt.ToString('yyyyMMddTHHmmssZ')
         $logPath = Join-Path $LogDirectory "$stamp-$($plan.Id)-$($Action.ToLowerInvariant())-$operationId.log"
 
         try {
+            # Fail closed: the log is created before anything is detected or executed, so a
+            # failure here ends the operation as Failed without running winget.
+            $null = New-Item -ItemType Directory -Path $LogDirectory -Force -ErrorAction Stop
             Write-DeployForgeLog -Path $logPath -Message "Operation $operationId started: action $Action for '$($plan.Id)' ($($plan.SourceType): $($plan.PackageId))."
             Write-DeployForgeLog -Path $logPath -Message "Planned command: $($plan.Command)"
+
+            # Recorded, not enforced: per-user installers do not need elevation, machine-wide ones do.
+            $elevated = 'n/a'
+            if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+                $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+                $elevated  = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            }
+            Write-DeployForgeLog -Path $logPath -Message "Session elevated: $elevated."
 
             $installed = Test-DeployForgeApplicationInstalled -PackageId $plan.PackageId -Source $plan.SourceType
             Write-DeployForgeLog -Path $logPath -Message "Detected state before: installed=$installed."
@@ -118,7 +128,17 @@ function Invoke-DeployForgeDeployment {
         }
 
         $level = if ($status -eq 'Failed') { 'ERROR' } else { 'INFO' }
-        Write-DeployForgeLog -Path $logPath -Level $level -Message "Result: $status. $message"
+        try {
+            Write-DeployForgeLog -Path $logPath -Level $level -Message "Result: $status. $message"
+        }
+        catch {
+            # The outcome is already known; report it even if its last log line is lost.
+            Write-Warning $_.Exception.Message
+        }
+
+        if (-not (Test-Path -LiteralPath $logPath -PathType Leaf)) {
+            $logPath = $null
+        }
 
         if ($status -eq 'Failed') {
             Write-Warning "Deployment of '$Id' ($Action) failed: $message See log: $logPath"

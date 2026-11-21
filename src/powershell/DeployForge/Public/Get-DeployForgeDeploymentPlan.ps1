@@ -26,6 +26,20 @@ function Get-DeployForgeDeploymentPlan {
     $packageId  = $app.source.package_id
     $entryPoint = $app.deployment.entry_point
 
+    # These values become winget arguments or file paths. Pattern checks such as -notmatch
+    # filter arrays instead of rejecting them, so the type is checked first.
+    $fields = [ordered]@{
+        'source.type'            = $sourceType
+        'source.package_id'      = $packageId
+        'version'                = $app.version
+        'deployment.entry_point' = $entryPoint
+    }
+    foreach ($field in $fields.GetEnumerator()) {
+        if ($field.Value -isnot [string] -or [string]::IsNullOrWhiteSpace($field.Value)) {
+            throw "$($field.Key) for '$Id' must be a non-empty string."
+        }
+    }
+
     # entry_point is catalog data that becomes a file path: it must stay inside the repository.
     if ([System.IO.Path]::IsPathRooted($entryPoint)) {
         throw "entry_point for '$Id' must be a relative path: $entryPoint"
