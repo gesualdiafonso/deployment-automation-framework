@@ -124,6 +124,20 @@ def test_malformed_json_raises(tmp_path: Path, schema_path: Path) -> None:
     assert_catalog_error(service, "Malformed JSON in catalog", "line 1")
 
 
+# 5b
+@pytest.mark.parametrize("target", ["catalog", "schema"])
+def test_deeply_nested_json_raises_catalog_error(
+    tmp_path: Path, catalog_path: Path, schema_path: Path, target: str
+) -> None:
+    nested = tmp_path / "nested.json"
+    nested.write_text("[" * 200_000, encoding="utf-8")
+    paths = {"catalog_path": catalog_path, "schema_path": schema_path}
+    paths[f"{target}_path"] = nested
+    service = CatalogService(**paths)
+
+    assert_catalog_error(service, f"Could not read {target}", "nested.json")
+
+
 # 6
 def test_invalid_schema_raises(tmp_path: Path, catalog_path: Path) -> None:
     bad_schema = write_json(tmp_path / "bad.schema.json", {"type": 123})

@@ -120,7 +120,8 @@ class CatalogService:
                     f"column {exc.colno}: {exc.msg}"
                 ),
             ) from exc
-        except (OSError, UnicodeDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, RecursionError) as exc:
+            # RecursionError: JSON nested too deeply for the parser.
             raise CatalogError(
                 _PUBLIC_MESSAGE,
                 detail=f"Could not read {label} {path}: {exc}",

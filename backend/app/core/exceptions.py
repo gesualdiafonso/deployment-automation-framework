@@ -100,6 +100,25 @@ def _unprocessable(message: str) -> JSONResponse:
     )
 
 
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Map any unexpected exception to a generic 500 in the ``{"detail": str}`` shape.
+
+    Starlette re-raises the exception after this response is sent, so the
+    server still logs the full traceback; only a one-line summary is logged
+    here, and nothing about the exception reaches the client.
+    """
+    logger.error(
+        "Unhandled %s on %s %s",
+        type(exc).__name__,
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": INTERNAL_ERROR_MESSAGE},
+    )
+
+
 async def response_validation_error_handler(
     request: Request,
     exc: Exception,

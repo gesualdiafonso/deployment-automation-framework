@@ -465,6 +465,42 @@ def test_strict_contract_accepts_real_catalog_data(client: TestClient) -> None:
     assert response.json()["total"] == 21
 
 
+# --- 13: unexpected exceptions -> generic JSON 500 ----------------------------
+
+
+class _BrokenService:
+    """Stands in for CatalogService and fails with an unexpected exception."""
+
+    def get_applications(self) -> list[dict[str, Any]]:
+        raise RuntimeError("secret-value at C:/internal/path")
+
+    def get_application_by_id(self, application_id: str) -> dict[str, Any] | None:
+        raise RuntimeError("secret-value at C:/internal/path")
+
+
+@pytest.mark.parametrize("path", [BASE, f"{BASE}/google-chrome"])
+def test_unexpected_exception_returns_contract_500(
+    caplog: pytest.LogCaptureFixture,
+    path: str,
+) -> None:
+    # Starlette re-raises after responding so the server can log the traceback;
+    # the client must still receive the documented JSON body.
+    app.dependency_overrides[get_catalog_service] = lambda: _BrokenService()
+    try:
+        with caplog.at_level(logging.ERROR, logger="app.core.exceptions"):
+            response = TestClient(app, raise_server_exceptions=False).get(path)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == INTERNAL_ERROR
+    assert_no_leak(response.text, "secret-value", "RuntimeError", "C:/internal")
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "Unhandled RuntimeError" in logged
+    assert "secret-value" not in logged
+
+
 # --- Isolation and documentation ---------------------------------------------
 
 
