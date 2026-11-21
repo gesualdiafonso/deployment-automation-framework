@@ -5,61 +5,29 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
-
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import SchemaError
-
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CATALOG = ROOT / "packages" / "catalog.json"
-DEFAULT_SCHEMA = ROOT / "catalog" / "schema" / "catalog.schema.json"
+_BACKEND_DIR = ROOT / "backend"
 
+# Explicit bootstrap: the validation rules live in the backend package
+# (app.core.catalog_validation) so the API and this CLI share one
+# implementation. The path is derived from this file's location, never from the
+# current working directory, so the CLI runs the same from any folder.
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
-def load_json(path: Path) -> Any:
-    """Load JSON, accepting UTF-8 files with or without a BOM."""
-    with path.open("r", encoding="utf-8-sig") as file:
-        return json.load(file)
+from app.core.catalog_validation import (  # noqa: E402
+    SchemaError,
+    check_schema,
+    load_json,
+    validate_catalog_data,
+)
+from app.core.config import settings  # noqa: E402
 
+__all__ = ["load_json", "main", "validate_catalog_data"]
 
-def validate_catalog_data(
-    catalog: Any,
-    schema: dict[str, Any],
-) -> list[str]:
-    """Validate catalog structure and ensure application IDs are unique."""
-    errors = [
-        f"{error.json_path}: {error.message}"
-        for error in Draft202012Validator(schema).iter_errors(catalog)
-    ]
-
-    if not isinstance(catalog, dict):
-        return sorted(errors)
-
-    applications = catalog.get("applications")
-
-    if not isinstance(applications, list):
-        return sorted(errors)
-
-    seen_ids: set[str] = set()
-
-    for index, application in enumerate(applications):
-        if not isinstance(application, dict):
-            continue
-
-        application_id = application.get("id")
-
-        if not isinstance(application_id, str):
-            continue
-
-        if application_id in seen_ids:
-            errors.append(
-                f"$.applications[{index}].id: "
-                f"duplicate application ID '{application_id}'"
-            )
-        else:
-            seen_ids.add(application_id)
-
-    return sorted(errors)
+DEFAULT_CATALOG = settings.catalog_path
+DEFAULT_SCHEMA = settings.catalog_schema_path
 
 
 def main() -> int:
@@ -82,7 +50,7 @@ def main() -> int:
         return 2
 
     try:
-        Draft202012Validator.check_schema(schema)
+        check_schema(schema)
     except SchemaError as exc:
         print(f"ERROR: Invalid JSON Schema: {exc.message}", file=sys.stderr)
         return 2

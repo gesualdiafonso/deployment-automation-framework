@@ -36,4 +36,4 @@ jobs:
         run: python tools/validate_catalog.py
 
       - name: Run tests
-        run: python -m pytest tests/python -v
+        run: python -m pytest tests/python backend/tests -v -W error::DeprecationWarning
