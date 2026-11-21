@@ -1,41 +1,51 @@
-# 🏛️ Arquitetura do Sistema - Enterprise Deployment Automation
+# Architecture
 
-Este documento descreve a arquitetura lógica e o fluxo de dados do framework de automação de empacotamento e distribuição de softwares.
+This page describes the architecture as implemented. Planned components are listed separately at the end.
 
-## 🔄 Fluxo Geral de Operação
+## Components
 
 ```text
-[ Solicitação / Portal Web ] 
-         │ (FastAPI / REST API)
-         ▼
-[ Microsoft Graph API & OAuth2 ]
-         │ 
-         ├────────────────────────────────┐
-         ▼                                ▼
-[ Microsoft Intune (Nuvem) ]    [ SCCM / ConfigMgr (On-Premises) ]
-         │                                │
-         └───────────────┬────────────────┘
-                         ▼
-             [ Estação de Trabalho do Usuário ]
-             (Company Portal / Software Center)
-                         │
-                         ▼ (Fallback / Rede Local)
-                 [ Compartilhamento \\eds\temp ]
+                    packages/catalog.json  (21 applications, metadata only)
+                               │
+            validated against catalog/schema/catalog.schema.json
+                               │
+        ┌──────────────────────┼────────────────────────────┐
+        ▼                      ▼                            ▼
+ tools/validate_catalog.py   backend/app (FastAPI)       src/powershell/DeployForge
+ CLI, used by CI             read-only REST API          deployment engine (Windows)
+        └───── share backend/app/core/catalog_validation.py │
+                                                            ▼
+                                     plan ─► detect ─► winget install/uninstall ─► detect ─► log
 ```
 
-# 🧩 Componentes Principais
-Camada de Repositório de Mídias (packages/):
+| Component | Location | Platforms | Responsibility |
+|---|---|---|---|
+| Catalog | `packages/catalog.json` | any | Application metadata: `id`, `name`, `version`, `source` (`winget`, `msstore`, `direct`, `local`), `deployment` (`powershell`, `psadt`, `entry_point`). No installers. |
+| Schema | `catalog/schema/catalog.schema.json` | any | JSON Schema Draft 2020-12 for the catalog. |
+| Validator | `tools/validate_catalog.py` | any | Schema check plus unique IDs. Exit codes: `0` valid, `1` invalid, `2` missing, unreadable, or malformed file. |
+| REST API | `backend/app/` | any | Read-only catalog API (`/health`, `/api/v1/applications`, `/api/v1/applications/{application_id}`). Reads and validates the catalog on every request. See [api-reference.md](api-reference.md). |
+| Engine | `src/powershell/DeployForge/` | PowerShell 7.2+; execution on Windows only | Builds plans and installs or uninstalls applications with WinGet, with detection before and after each action and one log per operation. |
+| Lifecycle tooling | `tools/Test-DeployForgeLifecycle.ps1`, `tools/sandbox/` | Windows only | Manual install, reinstall, uninstall, uninstall cycle with evidence, intended for Windows Sandbox. Not run in CI. |
+| CI | `.github/workflows/` | — | Python tests, Pester and PSScriptAnalyzer, gitleaks and pip-audit. |
 
-Centraliza os scripts de automação baseados em PSAppDeployToolkit (PSADT).
+## Boundaries
 
-Utiliza o arquivo source-repo-pointer.json para mapear de forma dinâmica onde buscar instaladores (seja em servidores locais de rede como \\eds\temp\Software ou repositórios externos via winget).
+- The API and the engine are independent. The API never imports the engine or runs any command; the engine does not call the API.
+- The API and the validator share one validation module. The engine reads the catalog JSON directly and applies its own checks to the values that become command arguments or file paths.
+- The engine executes only through one private function (`Invoke-DeployForgeWinget`), which runs nothing outside Windows.
 
-Camada de Backend (portal-backend/):
+## Engine flow
 
-Desenvolvida em Python com FastAPI.
+1. `Get-DeployForgeApplication` reads the catalog and finds the application by `id`.
+2. `Get-DeployForgeDeploymentPlan` validates the catalog values and builds the winget arguments. `direct` and `local` sources are reported as unsupported.
+3. `Invoke-DeployForgeDeployment` asks for confirmation, creates the log, records whether the session is elevated, detects the current state with `winget list`, runs `winget install` or `winget uninstall` only if needed, detects again, and returns a `DeployForge.DeploymentResult`.
 
-Expõe endpoints REST que se comunicam com a Microsoft Graph API utilizando autenticação segura via OAuth2 (Client Credentials) para automatizar o gerenciamento de pacotes e dispositivos.
+PSADT `entry_point` scripts are metadata only: the engine never runs them.
 
-Camada de Remediação (scripts/):
+## Planned, not implemented
 
-Scripts em PowerShell focados em corrigir falhas comuns de agentes locais nas estações de trabalho, realizando a limpeza de cache corrompido (ccmcache) e reinício de serviços críticos (CcmExec, IntuneManagementExtension).
+- Deployment requests through the API, with authentication and a job-status store.
+- Microsoft Graph, Intune, and Configuration Manager integration.
+- PSAppDeployToolkit packages and the `direct` and `local` sources.
+- Endpoint remediation scripts.
+- Upgrades.

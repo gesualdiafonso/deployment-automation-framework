@@ -192,7 +192,7 @@ The module in `src/powershell/DeployForge/` provides three public functions:
 | `Get-DeployForgeDeploymentPlan` | Builds the plan for an `-Action` (`Install` by default, or `Uninstall`): the exact silent `winget` command and checks, without executing anything. |
 | `Invoke-DeployForgeDeployment` | **Really installs or uninstalls** the application with WinGet. Supports `-WhatIf` (dry run: nothing is executed and no log is written) and `-Confirm` (`ConfirmImpact` is `High`, so it asks before acting unless `-Confirm:$false` is passed). |
 
-`Invoke-DeployForgeDeployment` follows a fixed flow: build the plan, detect the current state with `winget list`, run `winget install` or `winget uninstall` only if the state needs to change, then detect again to verify the result. It returns a `DeployForge.DeploymentResult` object whose `Status` is one of `Installed`, `AlreadyInstalled`, `Uninstalled`, `NotInstalled`, `Failed`, `DryRun`, or `Skipped`, and writes one log file per operation under `logs/` (ignored by Git).
+`Invoke-DeployForgeDeployment` follows a fixed flow: build the plan, detect the current state with `winget list`, run `winget install` or `winget uninstall` only if the state needs to change, then detect again to verify the result. It returns a `DeployForge.DeploymentResult` object whose `Status` is one of `Installed`, `AlreadyInstalled`, `Uninstalled`, `NotInstalled`, `Failed`, `DryRun`, or `Skipped`, and writes one log file per operation under `logs/` (ignored by Git). The log is created before anything is detected or executed: if it cannot be written, the operation ends as `Failed` and winget is not run. Each log also records whether the session was elevated.
 
 Current limits:
 
@@ -280,7 +280,7 @@ Every error uses the same body shape, `{"detail": "<message>"}`:
 | 404 | Well-formed ID that is not in the catalog | `{"detail": "Application 'application-inexistente' not found."}` |
 | 422 | Malformed `application_id` | `{"detail": "Invalid request parameter: application_id."}` |
 | 500 | Catalog or schema missing or unreadable, malformed JSON, invalid schema, catalog that breaks the schema, or duplicate IDs | `{"detail": "The application catalog is unavailable."}` |
-| 500 | The server produced a response outside its own contract | `{"detail": "Internal server error."}` |
+| 500 | The server produced a response outside its own contract, or hit an unexpected internal error | `{"detail": "Internal server error."}` |
 
 Error responses never include stack traces, file paths, parser or schema messages, or the submitted value of a malformed parameter. The technical cause of a 500 is written to the server log instead.
 
@@ -351,6 +351,7 @@ deployment-automation-framework/
 │   └── schema/
 │       └── catalog.schema.json   # JSON Schema for the catalog
 ├── docs/
+│   ├── evidence/                 # Validation evidence (day-4-validation.md)
 │   ├── architecture.md
 │   ├── security.md
 │   ├── api-reference.md
@@ -385,12 +386,16 @@ Planned additions, as the corresponding components are implemented: PSADT packag
 
 ### Prerequisites
 
-- Windows 10/11 and Git.
-- Python 3.12.
-- PowerShell 7.2+ and Pester 5+.
-- Optional, for future package testing: PSAppDeployToolkit and a disposable Windows virtual machine or Windows Sandbox.
+| Part | Platforms | Requirements |
+|---|---|---|
+| Catalog, validator, REST API, Python tests (steps 1–4) | Windows, macOS, or Linux | Git and Python 3.12 |
+| DeployForge engine and Pester tests (steps 5–6) | Windows 10/11 | PowerShell 7.2+, Pester 5+, and WinGet for real installs |
+
+Real installations and uninstallations only run on Windows: on other systems the engine can read the catalog and build plans, but refuses to run WinGet. Optional, for future package testing: PSAppDeployToolkit and a disposable Windows virtual machine or Windows Sandbox.
 
 ### 1. Clone the repository and install the Python dependencies
+
+Windows (PowerShell):
 
 ```powershell
 git clone https://github.com/gesualdiafonso/deployment-automation-framework.git
@@ -401,7 +406,20 @@ py -3.12 -m venv .venv
 python -m pip install -r backend/requirements.txt
 ```
 
-If script execution is blocked, run the commands below with `.\.venv\Scripts\python.exe` instead of activating the environment. All commands are run from the repository root.
+If script execution is blocked, run the commands below with `.\.venv\Scripts\python.exe` instead of activating the environment.
+
+macOS or Linux:
+
+```bash
+git clone https://github.com/gesualdiafonso/deployment-automation-framework.git
+cd deployment-automation-framework
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
+```
+
+With the environment activated, the commands in steps 2–4 are the same on every system. All commands are run from the repository root.
 
 ### 2. Validate the catalog
 
@@ -429,6 +447,13 @@ The API listens on `http://127.0.0.1:8000` (`--reload` restarts it when the code
 Invoke-RestMethod http://127.0.0.1:8000/health
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/applications
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/applications/google-chrome
+```
+
+On macOS or Linux, use `curl`:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/v1/applications/google-chrome
 ```
 
 Or open `http://127.0.0.1:8000/docs` in a browser. See [REST API](#5-rest-api-read-only-catalog-v010) for every endpoint and status code. Stop the server with `Ctrl+C`.

@@ -28,11 +28,22 @@ The API only reads the catalog. It never runs WinGet, PowerShell, or any install
 
 ## Running the API locally
 
-Requires Python 3.12. Run these commands from the repository root:
+Requires Python 3.12 on Windows, macOS, or Linux. The API never runs WinGet or PowerShell, so it has no Windows-specific requirements. Run these commands from the repository root.
+
+Windows (PowerShell):
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install -r backend/requirements.txt
+python -m uvicorn app.main:app --app-dir backend --reload
+```
+
+macOS or Linux:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r backend/requirements.txt
 python -m uvicorn app.main:app --app-dir backend --reload
 ```
@@ -155,7 +166,7 @@ The ID format is checked before the catalog is read, so a malformed ID always re
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/applications/google-chrome
 ```
 
-`Invoke-RestMethod` throws on `4xx` and `5xx` responses. To see the status code and the error body, use `curl.exe`:
+`Invoke-RestMethod` throws on `4xx` and `5xx` responses. To see the status code and the error body, use `curl.exe` on Windows (or `curl` on macOS and Linux):
 
 ```powershell
 curl.exe -i http://127.0.0.1:8000/api/v1/applications/application-inexistente   # 404
@@ -235,7 +246,7 @@ Every error response has the same shape:
 | `404` | `Application '<id>' not found.` | Well-formed `application_id` that is not in the catalog. `<id>` is the requested ID; it can only contain characters allowed by the ID rule. |
 | `422` | `Invalid request parameter: application_id.` | Malformed `application_id` |
 | `500` | `The application catalog is unavailable.` | The catalog or schema file is missing or unreadable, the JSON is malformed, the schema is invalid, the catalog breaks the schema, or the catalog has duplicate IDs |
-| `500` | `Internal server error.` | The server produced a response outside its own contract |
+| `500` | `Internal server error.` | The server produced a response outside its own contract, or hit an unexpected internal error |
 
 Error responses never include stack traces, file paths, parser or schema messages, the validation pattern, or the submitted value of a malformed parameter. For a `500`, the technical cause is written to the server log instead.
 
