@@ -48,6 +48,10 @@ def main() -> int:
     except OSError as exc:
         print(f"ERROR: Could not read file: {exc}", file=sys.stderr)
         return 2
+    except (UnicodeDecodeError, RecursionError) as exc:
+        # Not UTF-8, or JSON nested too deeply to parse: unreadable, not invalid.
+        print(f"ERROR: Could not parse file: {exc}", file=sys.stderr)
+        return 2
 
     try:
         check_schema(schema)

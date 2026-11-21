@@ -109,3 +109,37 @@ def test_cli_runs_from_another_directory(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("Catalog validation passed: ")
     assert result.stdout.rstrip().endswith("application(s).")
+
+
+# Documented exit codes: 0 valid, 1 invalid catalog, 2 file missing/unreadable/
+# malformed or invalid schema. Runs main() in-process on temporary files.
+@pytest.mark.parametrize(
+    ("content", "expected_code", "expected_text"),
+    [
+        (None, 2, "File not found"),
+        (b'{"schema_version": "1.0", "applications": [', 2, "Invalid JSON"),
+        ('{"x": "café"}'.encode("latin-1"), 2, "Could not parse file"),
+        (b"[" * 200_000, 2, "Could not parse file"),
+        (b'{"schema_version": "1.0", "applications": [{"id": "x"}]}', 1, "Catalog validation failed"),
+    ],
+    ids=["missing", "malformed-json", "not-utf8", "deeply-nested", "invalid-catalog"],
+)
+def test_cli_exit_codes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    content: bytes | None,
+    expected_code: int,
+    expected_text: str,
+) -> None:
+    catalog = tmp_path / "catalog.json"
+    if content is not None:
+        catalog.write_bytes(content)
+    monkeypatch.setattr(cli, "DEFAULT_CATALOG", catalog)
+
+    code = cli.main()
+
+    captured = capsys.readouterr()
+    assert code == expected_code
+    assert expected_text in captured.out + captured.err
+    assert "Traceback" not in captured.err
