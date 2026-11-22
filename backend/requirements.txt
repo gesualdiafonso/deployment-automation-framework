@@ -2,7 +2,7 @@
 
 # --- API framework ---
 fastapi>=0.115,<1
-pydantic>=2.9,<3
+pydantic>=2.14.3,<3
 uvicorn[standard]>=0.30,<1
 
 # --- Catalog validation ---
