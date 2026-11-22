@@ -2,9 +2,9 @@
 
 **A modular IT automation project for standardized Windows application deployment, endpoint remediation, and API-driven operations.**
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B%20%7C%207.x-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/en-us/powershell/)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7.2%2B-5391FE?logo=powershell&logoColor=white)](https://learn.microsoft.com/en-us/powershell/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI%20(read--only%20v0.1.0)-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/features/actions)
 
@@ -18,9 +18,28 @@ It follows a modular architecture that separates application packaging, endpoint
 
 The framework is designed around realistic enterprise scenarios involving Windows endpoints and software management ecosystems such as Microsoft Intune and Microsoft Configuration Manager (SCCM).
 
+The deployment engine is called **DeployForge**: a PowerShell module that reads the application catalog, builds deployment plans, and installs or uninstalls applications through WinGet.
+
 **Project focus:** IT Automation, Systems Engineering, Platform Engineering, and DevOps.
 
 > **Project status:** Development / Proof of Concept. Features and integrations are implemented incrementally. Microsoft Intune, Configuration Manager, and Microsoft Graph API connectivity must be considered planned until their respective integrations have been implemented and tested.
+
+## Current Status
+
+| Component | State |
+|---|---|
+| Application catalog (21 applications) | Implemented |
+| Catalog JSON Schema (Draft 2020-12) | Implemented |
+| Catalog validator (`tools/validate_catalog.py`) | Implemented and tested with pytest |
+| DeployForge PowerShell module | Implemented and tested with Pester (WinGet calls mocked) |
+| Install and uninstall through WinGet (`winget` and `msstore` sources) | Implemented, with detection before and after each action and a log per operation |
+| `direct` and `local` sources | Planned (the engine reports them as unsupported) |
+| PSAppDeployToolkit packages | Planned (`entry_point` values are metadata only) |
+| Endpoint remediation scripts | Planned |
+| FastAPI catalog API (read-only, v0.1.0) | Implemented and tested with pytest |
+| Deployment interface + local PowerShell agent (dry run, detect, confirmed install/uninstall) | Implemented and tested with pytest and Pester; real installs not yet verified in a VM |
+| Deployment requests through the API | Planned |
+| Microsoft Graph / Intune / SCCM integration | Planned |
 
 ## Engineering Objectives
 
@@ -66,31 +85,43 @@ The architecture separates the control plane from endpoint execution.
 - **Integration layer:** Provides a future extension point for Microsoft Graph and endpoint management platforms.
 - **CI layer:** Validates code quality and tests before changes are merged.
 
-The diagram describes the intended architecture; it does not imply that every component or integration is already operational.
+The diagram describes the intended architecture; it does not imply that every component or integration is already operational. Today, the catalog, schema, validator, DeployForge engine, read-only catalog API, the local deployment interface and agent ([docs/deployment-agent.md](docs/deployment-agent.md)), and CI are implemented. User authentication, a multi-user deployment orchestrator, and the Graph integration are not.
 
 ## Technology Stack
 
-| Technology | Purpose |
-|---|---|
-| PowerShell | Windows administration, deployment, and remediation |
-| PSAppDeployToolkit (PSADT) | Standardized application deployment workflows |
-| Python | API services and orchestration logic |
-| FastAPI | REST endpoints, request validation, and API documentation |
-| Microsoft Graph API | Planned integration with Microsoft cloud management services |
-| OAuth 2.0 | Authentication for authorized service-to-service requests |
-| JSON | Application metadata and source configuration |
-| GitHub Actions | Continuous integration and automated validation |
-| Pester | PowerShell testing |
-| pytest | Python testing |
-| PSScriptAnalyzer | PowerShell static analysis |
+| Technology | Purpose | State |
+|---|---|---|
+| PowerShell 7.2+ | Windows administration, deployment, and remediation | In use |
+| Pester | PowerShell testing | In use |
+| Python 3.12 | Catalog validation and the REST API | In use |
+| jsonschema | Catalog validation against JSON Schema | In use |
+| FastAPI + Uvicorn | Read-only REST API and its OpenAPI documentation | In use |
+| Pydantic v2 | API response contracts | In use |
+| pytest + httpx2 | Python and API testing (`TestClient`) | In use |
+| JSON / JSON Schema | Application metadata and source configuration | In use |
+| GitHub Actions | Continuous integration and automated validation | In use |
+| WinGet | Package source for most applications | Referenced in the catalog |
+| PSAppDeployToolkit (PSADT) | Standardized application deployment workflows | Planned |
+| Microsoft Graph API / OAuth 2.0 | Integration with Microsoft cloud management services | Planned |
+| PSScriptAnalyzer | PowerShell static analysis | In use |
 
 ## Core Components
 
-### 1. Application Packaging
+### 1. Application Catalog and Packaging
 
-Reusable deployment packages provide a consistent structure for supported Windows applications.
+The catalog in `packages/catalog.json` describes each supported application. It currently lists 21 applications across these categories:
 
-Each package should define:
+- **Browsers:** Google Chrome, Mozilla Firefox.
+- **Productivity:** Microsoft 365 Apps, Notion.
+- **Communication:** WhatsApp, Slack, Zoom.
+- **Design:** Affinity, Figma, Inkscape, GIMP.
+- **Development:** Visual Studio Code, Postman, Git, GitHub Desktop, Node.js LTS, Python 3.12, PowerShell 7.
+- **Media:** Spotify, OBS Studio.
+- **Utilities:** 7-Zip.
+
+The catalog stores metadata only. No installers are committed to the repository.
+
+Reusable deployment packages are intended to provide a consistent structure for each application. Each package should define:
 
 - Application metadata and supported versions.
 - Installation and uninstallation procedures.
@@ -100,20 +131,13 @@ Each package should define:
 - Structured logs and failure handling.
 - Upgrade and repair behavior where supported.
 
-Example catalog categories:
-
-- Browsers: Google Chrome.
-- Productivity: Microsoft Office.
-- Messaging: WhatsApp.
-- Templates: reusable PSAppDeployToolkit deployment structures.
-
-PSADT is used as an existing deployment framework rather than presented as a custom implementation.
+PSADT is used as an existing deployment framework rather than presented as a custom implementation. The `entry_point` paths in the catalog are metadata in this phase: the referenced PowerShell files do not exist yet.
 
 ### 2. Configuration-Driven Package Sources
 
 The package source configuration separates application metadata from the binaries themselves.
 
-Example configuration:
+Example entry:
 
 ```json
 {
@@ -122,21 +146,32 @@ Example configuration:
     {
       "id": "google-chrome",
       "name": "Google Chrome",
-      "version": "stable",
+      "version": "latest",
       "source": {
         "type": "winget",
         "package_id": "Google.Chrome"
       },
       "deployment": {
         "type": "psadt",
-        "script": "packages/browsers/Google-Chrome/Deploy-Application.ps1"
+        "entry_point": "packages/browsers/google-chrome/Deploy-Application.ps1"
       }
     }
   ]
 }
 ```
 
-This example illustrates the proposed schema. The catalog implementation must validate package identifiers, source types, paths, and supported deployment methods before executing any operation.
+The schema in `catalog/schema/catalog.schema.json` defines the allowed fields:
+
+| Field | Rules |
+|---|---|
+| `id` | Lowercase letters, digits, and single hyphens (for example `visual-studio-code`). Must be unique. |
+| `name`, `version` | Non-empty strings. `latest` and `stable` mean "no pinned version". |
+| `source.type` | `winget`, `msstore`, `direct`, or `local`. |
+| `source.package_id` | Non-empty string (WinGet ID or Microsoft Store product ID). |
+| `deployment.type` | `powershell` or `psadt`. |
+| `deployment.entry_point` | Non-empty relative path (metadata in this phase). |
+
+Unknown fields are rejected. The validator additionally rejects duplicate application IDs. WhatsApp uses the `msstore` source because its publisher distributes it through the Microsoft Store rather than the `winget` repository.
 
 **Design principles:**
 
@@ -146,9 +181,34 @@ This example illustrates the proposed schema. The catalog implementation must va
 - Make package source selection explicit and auditable.
 - Treat external downloads as untrusted until their provenance and integrity have been verified.
 
-### 3. Endpoint Remediation
+The schema validates the shape of the data. It does not guarantee that a package exists, that an installer is legitimate, or that a script is safe. Those checks belong to later stages.
 
-PowerShell utilities target common Windows endpoint maintenance scenarios.
+### 3. DeployForge PowerShell Engine
+
+The module in `src/powershell/DeployForge/` provides three public functions:
+
+| Function | Purpose |
+|---|---|
+| `Get-DeployForgeApplication` | Reads the catalog and returns all applications, or one by `-Id`. |
+| `Get-DeployForgeDeploymentPlan` | Builds the plan for an `-Action` (`Install` by default, or `Uninstall`): the exact silent `winget` command and checks, without executing anything. |
+| `Invoke-DeployForgeDeployment` | **Really installs or uninstalls** the application with WinGet. Supports `-WhatIf` (dry run: nothing is executed and no log is written) and `-Confirm` (`ConfirmImpact` is `High`, so it asks before acting unless `-Confirm:$false` is passed). |
+
+`Invoke-DeployForgeDeployment` follows a fixed flow: build the plan, detect the current state with `winget list`, run `winget install` or `winget uninstall` only if the state needs to change, then detect again to verify the result. It returns a `DeployForge.DeploymentResult` object whose `Status` is one of `Installed`, `AlreadyInstalled`, `Uninstalled`, `NotInstalled`, `Failed`, `DryRun`, or `Skipped`, and writes one log file per operation under `logs/` (ignored by Git). The log is created before anything is detected or executed: if it cannot be written, the operation ends as `Failed` and winget is not run. Each log also records whether the session was elevated.
+
+Current limits:
+
+- Only the `winget` and `msstore` sources are executed; `direct` and `local` are reported as unsupported and nothing runs.
+- PSADT `entry_point` scripts are never executed: they are metadata in this phase.
+- Upgrades are not implemented.
+- WinGet must be available, so execution only works on Windows.
+
+The engine re-validates the fields that become command arguments or file paths: `package_id` and `version` must match a safe character pattern, and `entry_point` must be a relative path that stays inside the repository.
+
+`tools/Test-DeployForgeLifecycle.ps1` runs a real install → reinstall → uninstall → uninstall cycle and records the evidence. It refuses to run outside Windows Sandbox unless `-AllowRealInstall` is passed. `tools/sandbox/Start-DeployForgeSandbox.ps1` runs that cycle unattended inside Windows Sandbox. Neither runs in CI.
+
+### 4. Endpoint Remediation
+
+PowerShell utilities will target common Windows endpoint maintenance scenarios. This component is planned.
 
 Potential use cases include:
 
@@ -165,27 +225,79 @@ Destructive operations must be guarded by precondition checks, logging, and expl
 
 These scripts are intended for controlled testing in disposable virtual machines or other authorized lab environments, not for unvalidated deployment to production endpoints.
 
-### 4. REST API
+### 5. REST API (read-only catalog, v0.1.0)
 
-The FastAPI service is intended to expose a controlled interface for catalog operations and automation requests.
+The FastAPI service in `backend/app/` exposes the application catalog over HTTP. The catalog endpoints are **read-only**. The API never runs WinGet or PowerShell: deployments are queued for the separate local agent described in [docs/deployment-agent.md](docs/deployment-agent.md). There is no user authentication in this phase, so it is meant for local or lab use on a single-user machine.
 
-Proposed capabilities:
+`packages/catalog.json` is the only data source. Every request reads it and validates it against `catalog/schema/catalog.schema.json` (plus the unique-ID rule), so edits to the catalog are served on the next request without restarting. The API and `tools/validate_catalog.py` share the same validation code (`backend/app/core/catalog_validation.py`).
 
-| Endpoint | Purpose |
+| Method | Endpoint | Success | Errors |
+|---|---|---|---|
+| `GET` | `/health` | 200 | — |
+| `GET` | `/api/v1/applications` | 200 | 500 |
+| `GET` | `/api/v1/applications/{application_id}` | 200 | 404, 422, 500 |
+
+**`GET /health`**
+
+```json
+{"status": "ok", "service": "DeployForge API", "version": "0.1.0"}
+```
+
+**`GET /api/v1/applications`** returns every catalog application, in catalog order, and their count (`total` always equals the number of items):
+
+```json
+{
+  "applications": [
+    {
+      "id": "google-chrome",
+      "name": "Google Chrome",
+      "version": "latest",
+      "source": {"type": "winget", "package_id": "Google.Chrome"},
+      "deployment": {"type": "psadt", "entry_point": "packages/browsers/google-chrome/Deploy-Application.ps1"}
+    }
+  ],
+  "total": 21
+}
+```
+
+**`GET /api/v1/applications/{application_id}`** returns one application with the same structure as an item above. Records are returned exactly as stored in the catalog; responses never contain fields outside this contract.
+
+`application_id` is the catalog `id`, not `source.package_id`, and must match the catalog ID rule:
+
+```text
+^[a-z0-9]+(?:-[a-z0-9]+)*$     lowercase letters and digits, groups joined by single hyphens
+```
+
+| Request | Status |
 |---|---|
-| `GET /health` | Check API availability |
-| `GET /api/v1/packages` | List available packages |
-| `GET /api/v1/packages/{package_id}` | Retrieve package metadata |
-| `POST /api/v1/deployments` | Submit a deployment request |
-| `GET /api/v1/deployments/{deployment_id}` | Retrieve execution status |
+| `/api/v1/applications/google-chrome` | 200 |
+| `/api/v1/applications/application-inexistente` (well-formed, not in the catalog) | 404 |
+| `/api/v1/applications/Google.Chrome`, `GOOGLE-CHROME`, `google_chrome`, `-x`, `google-` | 422 |
 
-These endpoints represent the proposed API contract and should be treated as planned until implemented.
+Every error uses the same body shape, `{"detail": "<message>"}`:
 
-A deployment request should not automatically execute an arbitrary script or shell command. The service should accept only validated package identifiers and approved parameters, enforce authorization, and execute work through a controlled orchestration mechanism.
+| Status | When | Body |
+|---|---|---|
+| 404 | Well-formed ID that is not in the catalog | `{"detail": "Application 'application-inexistente' not found."}` |
+| 422 | Malformed `application_id` | `{"detail": "Invalid request parameter: application_id."}` |
+| 500 | Catalog or schema missing or unreadable, malformed JSON, invalid schema, catalog that breaks the schema, or duplicate IDs | `{"detail": "The application catalog is unavailable."}` |
+| 500 | The server produced a response outside its own contract, or hit an unexpected internal error | `{"detail": "Internal server error."}` |
 
-Long-running deployment jobs should eventually use a background worker and a persistent job-status store rather than blocking an HTTP request.
+Error responses never include stack traces, file paths, parser or schema messages, or the submitted value of a malformed parameter. The technical cause of a 500 is written to the server log instead.
 
-### 5. Microsoft Graph Integration
+**Interactive documentation** (generated by FastAPI while the API is running):
+
+| URL | Content |
+|---|---|
+| `http://127.0.0.1:8000/docs` | Swagger UI |
+| `http://127.0.0.1:8000/redoc` | ReDoc |
+| `http://127.0.0.1:8000/openapi.json` | OpenAPI 3.1 document |
+
+Swagger UI and ReDoc load their JavaScript and CSS from a public CDN, so the browser needs internet access to render them; `/openapi.json` does not.
+
+**Not in this version:** write endpoints, deployment requests, execution of installations, authentication and authorization, pagination, and filtering. A future deployment request should never execute an arbitrary script or shell command: it should accept only validated identifiers and approved parameters, enforce authorization, and run work through a controlled background worker with a persistent job-status store.
+
+### 6. Microsoft Graph Integration
 
 The planned Graph integration provides an extension point for interacting with supported Microsoft cloud management resources.
 
@@ -202,133 +314,185 @@ Credentials must be supplied through environment variables or a secrets manager 
 
 Actual API capabilities depend on the relevant Microsoft Graph endpoints, permissions, licensing, and management platform constraints.
 
-### 6. CI and Code Quality
+### 7. CI and Code Quality
 
-GitHub Actions will validate the project whenever changes are pushed or submitted through a pull request.
+Three GitHub Actions workflows:
 
-Planned checks include:
+| Workflow | Runner | Trigger | Checks |
+|---|---|---|---|
+| `python-ci.yml` | `ubuntu-latest` | Pushes to `main` and `docs/**`, pull requests to `main` | Python 3.12, install `backend/requirements.txt`, catalog validation, then the full pytest suite (`tests/python` and `backend/tests`, deprecation warnings treated as errors) |
+| `powershell-ci.yml` | `windows-latest` | Pushes to `main` and `docs/**`, pull requests to `main` | PSScriptAnalyzer, then Pester tests for the DeployForge module |
+| `security.yml` | `ubuntu-latest` | Pushes to `main`, pull requests, weekly schedule | Secret scanning (gitleaks) and Python dependency audit (pip-audit on `backend/requirements.txt`) |
 
-- PowerShell static analysis with PSScriptAnalyzer.
-- PowerShell unit tests with Pester.
-- Python linting and automated tests.
-- API schema and request-validation tests.
-- Configuration schema validation.
-- Dependency and secret scanning.
+Planned checks:
+
+- Python linting and static type checking.
 
 CI validates code and configuration; it does not prove that a package installs successfully on every supported endpoint. Integration testing in a Windows lab remains necessary.
 
 ## Repository Structure
 
 ```text
-enterprise-deployment-automation/
+deployment-automation-framework/
 ├── .github/
 │   └── workflows/
 │       ├── powershell-ci.yml
-│       └── python-ci.yml
+│       ├── python-ci.yml
+│       └── security.yml
+├── backend/
+│   ├── app/                      # FastAPI application
+│   │   ├── api/routes/           # HTTP endpoints (health, applications)
+│   │   ├── core/                 # Settings, errors, shared catalog validation
+│   │   ├── schemas/              # Pydantic response contracts
+│   │   ├── services/             # Catalog loading and querying
+│   │   └── main.py               # Application entry point
+│   ├── tests/                    # API, service and schema tests
+│   └── requirements.txt          # Python dependencies
+├── catalog/
+│   └── schema/
+│       └── catalog.schema.json   # JSON Schema for the catalog
 ├── docs/
+│   ├── evidence/                 # Validation evidence (day-4-validation.md)
 │   ├── architecture.md
 │   ├── security.md
 │   ├── api-reference.md
 │   └── troubleshooting.md
-├── portal-backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── api/
-│   │   ├── services/
-│   │   ├── repositories/
-│   │   └── schemas/
-│   ├── tests/
-│   └── requirements.txt
-├── scripts/
-│   ├── diagnostics/
-│   ├── remediation/
-│   └── shared/
 ├── packages/
-│   ├── catalog.json
-│   ├── templates/
-│   ├── browsers/
-│   ├── productivity/
-│   └── messaging/
-├── tests/
+│   └── catalog.json              # Application metadata (21 applications)
+├── src/
 │   └── powershell/
+│       └── DeployForge/          # PowerShell module (WinGet install/uninstall engine)
+│           ├── Private/
+│           ├── Public/
+│           ├── DeployForge.psd1
+│           └── DeployForge.psm1
+├── tests/
+│   ├── python/
+│   │   └── test_catalog.py
+│   └── powershell/
+│       └── DeployForge.Tests.ps1
+├── tools/
+│   ├── sandbox/                  # Runs the lifecycle test inside Windows Sandbox
+│   ├── Test-DeployForgeLifecycle.ps1  # Real install/uninstall lifecycle test (manual)
+│   └── validate_catalog.py       # Catalog validator (CLI)
 ├── .gitignore
 ├── LICENSE
+├── pytest.ini                    # pytest paths for tests/python and backend/tests
 └── README.md
 ```
 
-This structure is the intended repository layout. Directories and files should be added as the corresponding components are implemented.
+Planned additions, as the corresponding components are implemented: PSADT package templates and per-application packages under `packages/`, and endpoint remediation scripts.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Windows 10/11 or a supported Windows lab environment for endpoint scripts.
-- PowerShell 5.1 or a compatible PowerShell 7 release, depending on the script.
-- Python 3.11 or a compatible version specified by the project.
-- Git.
-- Optional: PSAppDeployToolkit, a test application installer, and a Windows virtual machine.
+| Part | Platforms | Requirements |
+|---|---|---|
+| Catalog, validator, REST API, Python tests (steps 1–4) | Windows, macOS, or Linux | Git and Python 3.12 |
+| DeployForge engine and Pester tests (steps 5–6) | Windows 10/11 | PowerShell 7.2+, Pester 5+, and WinGet for real installs |
 
-### 1. Clone the repository
+Real installations and uninstallations only run on Windows: on other systems the engine can read the catalog and build plans, but refuses to run WinGet. Optional, for future package testing: PSAppDeployToolkit and a disposable Windows virtual machine or Windows Sandbox.
 
-```bash
-git clone https://github.com/YOUR_USERNAME/enterprise-deployment-automation.git
-cd enterprise-deployment-automation
-```
+### 1. Clone the repository and install the Python dependencies
 
-### 2. Set up the API
-
-Run the following commands from the repository root:
-
-```bash
-cd portal-backend
-
-python -m venv .venv
-```
-
-Activate the environment on Windows PowerShell:
+Windows (PowerShell):
 
 ```powershell
+git clone https://github.com/gesualdiafonso/deployment-automation-framework.git
+cd deployment-automation-framework
+
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install -r backend/requirements.txt
 ```
 
-Install dependencies and start the development server:
+If script execution is blocked, run the commands below with `.\.venv\Scripts\python.exe` instead of activating the environment.
+
+macOS or Linux:
 
 ```bash
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload
+git clone https://github.com/gesualdiafonso/deployment-automation-framework.git
+cd deployment-automation-framework
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
 ```
 
-The commands assume the API entry point is implemented at `portal-backend/app/main.py` and exports a FastAPI instance named `app`.
+With the environment activated, the commands in steps 2–4 are the same on every system. All commands are run from the repository root.
 
-If the project uses a different entry point, adjust the command to match the actual implementation.
-
-When the server is running, FastAPI's interactive API documentation is normally available at:
-
-- `http://127.0.0.1:8000/docs`
-- `http://127.0.0.1:8000/redoc`
-
-### 3. Validate PowerShell scripts
-
-Install the required development modules in your test environment:
+### 2. Validate the catalog
 
 ```powershell
-Install-Module PSScriptAnalyzer -Scope CurrentUser
-Install-Module Pester -Scope CurrentUser
+python tools/validate_catalog.py
 ```
 
-Run static analysis:
+Expected output:
+
+```text
+Catalog validation passed: 21 application(s).
+```
+
+The validator exits with code `0` on success, `1` when the catalog is invalid, and `2` when a file is missing, the JSON is malformed, or the schema itself is invalid.
+
+### 3. Run the API
 
 ```powershell
-Invoke-ScriptAnalyzer -Path .\scripts -Recurse
+python -m uvicorn app.main:app --app-dir backend --reload
 ```
 
-Run automated tests after the test suite has been created:
+The API listens on `http://127.0.0.1:8000` (`--reload` restarts it when the code changes; omit it outside development). Try it:
 
 ```powershell
-Invoke-Pester .\tests\powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/applications
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/applications/google-chrome
 ```
 
-### 4. Test endpoint scripts safely
+On macOS or Linux, use `curl`:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/v1/applications/google-chrome
+```
+
+Or open `http://127.0.0.1:8000/docs` in a browser. See [REST API](#5-rest-api-read-only-catalog-v010) for every endpoint and status code. Stop the server with `Ctrl+C`.
+
+### 4. Run the Python tests
+
+```powershell
+python -m pytest tests/python backend/tests -v -W error::DeprecationWarning
+```
+
+This is the same command the CI runs. It covers the catalog validator (`tests/python`) and the API, service and response schemas (`backend/tests`). No test installs software or needs network access.
+
+### 5. Try the PowerShell engine
+
+These commands only read the catalog and show what would run. Nothing is installed:
+
+```powershell
+Import-Module .\src\powershell\DeployForge\DeployForge.psd1 -Force
+Get-DeployForgeApplication
+Get-DeployForgeDeploymentPlan -Id google-chrome
+Invoke-DeployForgeDeployment -Id whatsapp -WhatIf
+```
+
+Without `-WhatIf`, `Invoke-DeployForgeDeployment` installs or uninstalls the application for real. Run it only in a disposable VM or Windows Sandbox:
+
+```powershell
+Invoke-DeployForgeDeployment -Id 7zip                     # asks for confirmation, then installs
+Invoke-DeployForgeDeployment -Id 7zip -Action Uninstall   # asks for confirmation, then uninstalls
+```
+
+### 6. Run the PowerShell tests
+
+```powershell
+Import-Module Pester -MinimumVersion 5.0
+Invoke-Pester -Path tests/powershell -Output Detailed
+```
+
+### 7. Test endpoint scripts safely
 
 Use a Windows virtual machine with a snapshot and no production management dependencies.
 
@@ -360,30 +524,36 @@ Production use would require additional security reviews, permission configurati
 
 ## Testing Strategy
 
-The project will use a layered testing strategy.
+The project uses a layered testing strategy. Some layers are in place and others are planned.
 
-| Layer | Validation |
-|---|---|
-| Static analysis | PowerShell and Python code quality |
-| Unit tests | Catalog parsing, validation, and service logic |
-| API tests | HTTP status codes, schemas, and authorization |
-| Package tests | Installation, detection, upgrade, and uninstall |
-| Integration tests | API-to-orchestrator and Graph connectivity |
-| Recovery tests | Remediation behavior and failure handling |
-| CI validation | Automated checks on every proposed change |
+| Layer | Validation | State |
+|---|---|---|
+| Unit tests (Python) | Catalog schema, required fields, duplicate IDs, catalog service, response schemas kept in sync with the JSON Schema | In place |
+| Unit tests (PowerShell) | Plan building, source types, path and package ID safety, `-WhatIf` behavior, install/uninstall flow with detection, verification, failures and logging (WinGet mocked), every catalog application resolving to a supported plan | In place |
+| CI validation | Automated checks on every proposed change | In place |
+| Static analysis | PowerShell code quality with PSScriptAnalyzer (Python linting planned) | In place (PowerShell) |
+| API tests | HTTP status codes (200/404/422/500), response contracts, no internal details in errors | In place |
+| API authorization tests | Access control | Planned (no authentication yet) |
+| Package tests | Real install, detection, and uninstall in Windows Sandbox (`tools/Test-DeployForgeLifecycle.ps1`, run manually); upgrade | Install/uninstall tooling in place (manual, not in CI); upgrade planned |
+| Integration tests | API-to-orchestrator and Graph connectivity | Planned |
+| Recovery tests | Remediation behavior and failure handling | Planned |
 
 Success criteria should be measurable: for example, passing test suites, correct detection results, expected exit codes, and successful recovery from documented failure scenarios.
 
 ## Roadmap
 
-- [ ] Establish repository structure and development conventions.
-- [ ] Implement and test the application catalog schema.
+- [x] Establish repository structure and development conventions.
+- [x] Implement and test the application catalog schema.
+- [x] Expand the catalog to 21 applications across browsers, productivity, communication, design, development, media, and utilities.
+- [x] Build the DeployForge dry-run engine (plan building and `-WhatIf`) with Pester tests.
+- [x] Add WinGet install and uninstall with detection, post-action verification, and per-operation logs.
+- [x] Add PSScriptAnalyzer to the PowerShell CI workflow.
+- [ ] Implement real installation through WinGet with idempotency checks, structured results, and per-run logs, tested in Windows Sandbox.
 - [ ] Create a reusable PSAppDeployToolkit package template.
 - [ ] Develop one fully tested Windows application package.
 - [ ] Implement safe diagnostic and remediation scripts.
-- [ ] Build the initial FastAPI endpoints and request validation.
+- [x] Build the initial read-only FastAPI catalog endpoints and request validation.
 - [ ] Add structured logging and deployment status tracking.
-- [ ] Configure GitHub Actions for Python and PowerShell validation.
 - [ ] Add authentication, authorization, and audit logging.
 - [ ] Implement and test Microsoft Graph integration.
 - [ ] Add a controlled background execution worker.
@@ -396,7 +566,7 @@ This project is designed to demonstrate practical engineering skills in:
 
 - Windows systems administration and endpoint management.
 - PowerShell automation and application packaging.
-- Python backend development and REST API design.
+- Python tooling and REST API design.
 - Integration architecture and API authentication.
 - Configuration-driven systems.
 - CI, automated testing, and code quality.
@@ -408,10 +578,12 @@ The project is particularly relevant to IT Automation Engineer, Systems Engineer
 ## Documentation and References
 
 - [PSAppDeployToolkit Documentation](https://psappdeploytoolkit.com/docs/introduction)
+- [WinGet Documentation](https://learn.microsoft.com/en-us/windows/package-manager/winget/)
 - [Microsoft Intune Remediations](https://learn.microsoft.com/en-us/intune/device-management/tools/deploy-remediations)
 - [Microsoft Graph Documentation](https://learn.microsoft.com/en-us/graph/overview)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Pester Documentation](https://pester.dev/)
+- [JSON Schema Documentation](https://json-schema.org/)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 
 ## Author
