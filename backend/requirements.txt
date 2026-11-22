@@ -10,4 +10,4 @@ jsonschema>=4.23,<5
 
 # --- Testing ---
 pytest>=8.0,<10
-httpx2>=2.0,<3
+httpx2>=2.16.2,<3
