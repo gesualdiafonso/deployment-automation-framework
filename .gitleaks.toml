@@ -1,0 +1,14 @@
+title = "DeployForge gitleaks configuration"
+
+[extend]
+# Keep all default rules; only add narrow allowlists.
+useDefault = true
+
+[[allowlists]]
+description = "Generated, vendored or local-only paths that never hold project secrets"
+paths = [
+  '''(^|/)\.venv/''',
+  '''(^|/)\.pytest_cache/''',
+  '''(^|/)__pycache__/''',
+  '''(^|/)logs/''',
+]
