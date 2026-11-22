@@ -18,7 +18,7 @@ export interface NavigationItem {
 }
 
 export const navigationItems: readonly NavigationItem[] = [
-  { label: 'Dashboard', to: paths.dashboard, icon: LayoutDashboard },
+  { label: 'Overview', to: paths.dashboard, icon: LayoutDashboard },
   { label: 'Catalog', to: paths.catalog, icon: Package },
   { label: 'Deployments', to: paths.deployments, icon: Rocket },
   { label: 'API Explorer', to: paths.apiExplorer, icon: Braces },

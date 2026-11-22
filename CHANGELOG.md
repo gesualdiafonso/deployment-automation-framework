@@ -23,6 +23,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   (gitleaks and pip-audit).
 - Dependabot configuration for Python and GitHub Actions dependencies.
 - Pull request template.
+- Web frontend (React, TypeScript, Vite) with dashboard, catalog, API explorer
+  and deployment center, using only real API data.
+- Deployment interface: `GET /api/v1/deployment/status`, `POST /api/v1/deployment/preview`,
+  `POST/GET /api/v1/deployment/operations`, `GET /api/v1/deployment/operations/{id}`,
+  `POST /api/v1/deployment/operations/{id}/cancel`, with single-use confirmation tokens,
+  origin and CSRF checks, a JSON operation registry and an audit log. The API never
+  executes processes.
+- Agent interface (`/api/v1/agent/heartbeat`, `/operations/claim`, `/operations/{id}/result`)
+  and the local PowerShell agent `src/powershell/DeployForgeAgent` (dry run and detect by
+  default; real execution only with `DEPLOYFORGE_AGENT_ALLOW_EXECUTE=1`).
+- Engine: `Get-DeployForgeApplicationState`, a read-only detection function (module 0.5.0).
+- `GET /api/v1/deployment/audit`: read-only audit records with allow-listed fields.
+- Frontend: Logs & activity page and System & diagnostics page.
 
 ### Changed
 - The engine records in each operation log whether the session is elevated.
@@ -47,5 +60,6 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - `docs/security.md`, `docs/architecture.md`, and `docs/troubleshooting.md`
   rewritten to match the implementation.
 - Day 4 validation evidence in `docs/evidence/day-4-validation.md`.
+- `docs/deployment-agent.md`: deployment interface, agent, states and threat model.
 
 > v0.1.0 has not been released.

@@ -36,7 +36,8 @@ Run real installations only in a disposable virtual machine or Windows Sandbox. 
 - It never runs WinGet, PowerShell, subprocesses, or system commands. This was checked at runtime with a Python audit hook while exercising every route.
 - `application_id` is validated before the catalog is read; malformed values return `422` without echoing the value.
 - Error responses never contain stack traces, file paths, parser messages, or submitted values; the technical cause goes to the server log only.
-- There is **no authentication**. Uvicorn binds to `127.0.0.1` by default: keep it that way, do not use `--host 0.0.0.0`, and do not run the API as an administrator.
+- The deployment and agent endpoints have their own protections (origin and CSRF checks, confirmation tokens, agent token): see [deployment-agent.md](deployment-agent.md#security).
+- There is **no user authentication**. Uvicorn binds to `127.0.0.1` by default: keep it that way, do not use `--host 0.0.0.0`, and do not run the API as an administrator.
 
 ## CI
 

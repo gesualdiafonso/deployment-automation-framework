@@ -1,6 +1,6 @@
 # DeployForge API Reference
 
-DeployForge API **v0.1.0** is a read-only REST API over the DeployForge application catalog. It is implemented with FastAPI in [`backend/app/`](../backend/app/).
+DeployForge API **v0.1.0** is a REST API over the DeployForge application catalog. This page covers the read-only catalog endpoints; the deployment and agent endpoints are documented in [deployment-agent.md](deployment-agent.md). It is implemented with FastAPI in [`backend/app/`](../backend/app/).
 
 | Property | Value |
 |---|---|

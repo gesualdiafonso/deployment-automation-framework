@@ -454,3 +454,53 @@ Describe 'Invoke-DeployForgeDeployment' {
         { Invoke-DeployForgeDeployment -Id 'google-chrome' -Action 'Repair' -WhatIf } | Should -Throw
     }
 }
+
+Describe 'Get-DeployForgeApplicationState' {
+    It 'reports installed when detection finds the package (winget list only)' {
+        $root = Build-TestRepository -Applications @(Build-TestApp)
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @('Vendor App') } }
+
+        $state = Get-DeployForgeApplicationState -Id 'test-app' -RepositoryRoot $root
+
+        $state.Installed | Should -BeTrue
+        $state.PackageId | Should -Be 'Vendor.App'
+        $state.Source | Should -Be 'winget'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 1 -Exactly -ParameterFilter { $Arguments[0] -eq 'list' }
+    }
+
+    It 'reports not installed when winget finds no package' {
+        $root = Build-TestRepository -Applications @(Build-TestApp)
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = -1978335212; Output = @() } }
+
+        (Get-DeployForgeApplicationState -Id 'test-app' -RepositoryRoot $root).Installed | Should -BeFalse
+    }
+
+    It 'never runs install or uninstall' {
+        $root = Build-TestRepository -Applications @(Build-TestApp)
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @() } }
+
+        $null = Get-DeployForgeApplicationState -Id 'test-app' -RepositoryRoot $root
+
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly -ParameterFilter { $Arguments[0] -ne 'list' }
+    }
+
+    It 'throws for an unsupported source type without calling winget' {
+        $root = Build-TestRepository -Applications @(Build-TestApp -SourceType 'direct')
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 0; Output = @() } }
+
+        { Get-DeployForgeApplicationState -Id 'test-app' -RepositoryRoot $root } | Should -Throw -ExpectedMessage '*Cannot detect*'
+        Should -Invoke Invoke-DeployForgeWinget -ModuleName DeployForge -Times 0 -Exactly
+    }
+
+    It 'throws when detection fails' {
+        $root = Build-TestRepository -Applications @(Build-TestApp)
+        Mock Invoke-DeployForgeWinget -ModuleName DeployForge -MockWith { [pscustomobject]@{ ExitCode = 5; Output = @() } }
+
+        { Get-DeployForgeApplicationState -Id 'test-app' -RepositoryRoot $root } | Should -Throw -ExpectedMessage '*winget list failed*'
+    }
+
+    It 'throws for an unknown application' {
+        $root = Build-TestRepository -Applications @(Build-TestApp)
+        { Get-DeployForgeApplicationState -Id 'other-app' -RepositoryRoot $root } | Should -Throw -ExpectedMessage '*not found*'
+    }
+}

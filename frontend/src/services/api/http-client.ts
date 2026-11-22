@@ -54,14 +54,13 @@ async function readJson(response: Response, path: string): Promise<unknown> {
   }
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function performFetch(path: string, options: RequestOptions): Promise<Response> {
   const { method = 'GET', body, signal, headers = {} } = options
   const timeoutSignal = AbortSignal.timeout(getConfig().apiTimeoutMs)
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
 
-  let response: Response
   try {
-    response = await fetch(buildApiUrl(path), {
+    return await fetch(buildApiUrl(path), {
       method,
       headers: {
         Accept: 'application/json',
@@ -79,6 +78,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     }
     throw new ApiError('network', 'The DeployForge API could not be reached.', path)
   }
+}
+
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await performFetch(path, options)
 
   if (!response.ok) {
     // A gateway answering for the API (the Vite dev proxy, a reverse proxy) means the API itself is down.
@@ -101,4 +104,37 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   return (await readJson(response, path)) as T
+}
+
+/** Everything the API answered, including error statuses: used by the API Explorer. */
+export interface RawResponse {
+  readonly status: number
+  readonly ok: boolean
+  readonly durationMs: number
+  readonly contentType: string
+  /** Parsed JSON, or null when the body is not JSON. */
+  readonly json: unknown
+  readonly text: string
+}
+
+/**
+ * Sends a request and returns the raw answer without turning HTTP errors into
+ * exceptions. Only network failures and timeouts throw (as ApiError).
+ */
+export async function send(path: string, options: RequestOptions = {}): Promise<RawResponse> {
+  const started = performance.now()
+  const response = await performFetch(path, options)
+  const text = await response.text()
+  const durationMs = Math.round(performance.now() - started)
+  const contentType = response.headers.get('content-type') ?? ''
+
+  let json: unknown = null
+  if (isJsonResponse(response)) {
+    try {
+      json = JSON.parse(text)
+    } catch {
+      json = null
+    }
+  }
+  return { status: response.status, ok: response.ok, durationMs, contentType, json, text }
 }

@@ -12,3 +12,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** frontend/package.json version, injected by vite.config.ts. */
+declare const __DEPLOYFORGE_UI_VERSION__: string

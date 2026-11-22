@@ -4,14 +4,18 @@ import {
   CircleDashed,
   CircleHelp,
   CircleMinus,
+  CircleSlash,
   CircleX,
   Clock,
   FlaskConical,
+  Hourglass,
   LoaderCircle,
+  PackageCheck,
+  PackageX,
   type LucideIcon,
+  TriangleAlert,
+  Unplug,
   Undo2,
-  Wifi,
-  WifiOff,
 } from 'lucide-react'
 
 /**
@@ -48,42 +52,66 @@ export const TONE_CLASSES: Readonly<
 }
 
 export const STATUS_REGISTRY = {
-  /** Connection between the frontend and the DeployForge API (from GET /health). */
-  connection: {
+  /**
+   * Health of one system component (frontend, API, catalog, agent, engine, WinGet).
+   * 'unknown' means no data source reports this component yet; it is never a guess.
+   */
+  health: {
     checking: {
       label: 'Checking',
       tone: 'neutral',
       icon: LoaderCircle,
-      description: 'Contacting the DeployForge API.',
+      description: 'Waiting for the first answer.',
       inProgress: true,
     },
     online: {
       label: 'Online',
       tone: 'success',
-      icon: Wifi,
-      description: 'The DeployForge API is reachable.',
+      icon: CircleCheck,
+      description: 'Reachable and answering correctly.',
+      inProgress: false,
+    },
+    degraded: {
+      label: 'Degraded',
+      tone: 'warning',
+      icon: TriangleAlert,
+      description: 'Reachable, but not every function is working.',
       inProgress: false,
     },
     offline: {
       label: 'Offline',
       tone: 'danger',
-      icon: WifiOff,
-      description: 'The DeployForge API cannot be reached.',
+      icon: CircleX,
+      description: 'Not reachable.',
+      inProgress: false,
+    },
+    unsupported: {
+      label: 'Unsupported',
+      tone: 'neutral',
+      icon: CircleSlash,
+      description: 'Not available on this platform.',
+      inProgress: false,
+    },
+    unknown: {
+      label: 'Unknown',
+      tone: 'neutral',
+      icon: CircleHelp,
+      description: 'No data source reports this yet.',
       inProgress: false,
     },
   },
 
-  /** Lifecycle of a deployment request (approved contract, Day 5 §7; API not implemented yet). */
+  /** Lifecycle of a deployment operation (GET /api/v1/deployment/operations, Day 5 Step 06). */
   deploymentRequest: {
     queued: {
-      label: 'Queued',
+      label: 'Pending',
       tone: 'neutral',
       icon: Clock,
       description: 'Registered and waiting for the deployment agent.',
       inProgress: true,
     },
     claimed: {
-      label: 'In progress',
+      label: 'Running',
       tone: 'info',
       icon: LoaderCircle,
       description: 'The deployment agent has taken the request and is running it.',
@@ -108,6 +136,84 @@ export const STATUS_REGISTRY = {
       tone: 'neutral',
       icon: Ban,
       description: 'Cancelled before the agent took it.',
+      inProgress: false,
+    },
+    expired: {
+      label: 'Expired',
+      tone: 'neutral',
+      icon: Hourglass,
+      description: 'No deployment agent took the request in time. Nothing was run.',
+      inProgress: false,
+    },
+    lost: {
+      label: 'Outcome unknown',
+      tone: 'warning',
+      icon: Unplug,
+      description: 'The agent stopped reporting while running it. Check the machine (Detect) before retrying.',
+      inProgress: false,
+    },
+  },
+
+  /** Whether a DeployForge function can be used right now (System diagnostics). */
+  capability: {
+    available: {
+      label: 'Available',
+      tone: 'success',
+      icon: CircleCheck,
+      description: 'Can be used now.',
+      inProgress: false,
+    },
+    disabled: {
+      label: 'Disabled',
+      tone: 'neutral',
+      icon: CircleMinus,
+      description: 'Supported, but switched off by configuration.',
+      inProgress: false,
+    },
+    unavailable: {
+      label: 'Unavailable',
+      tone: 'danger',
+      icon: CircleX,
+      description: 'Supported here, but a required component is not running or not reachable.',
+      inProgress: false,
+    },
+    unsupported: {
+      label: 'Unsupported',
+      tone: 'neutral',
+      icon: CircleSlash,
+      description: 'Not available on this platform. This is expected, not a failure.',
+      inProgress: false,
+    },
+    unknown: {
+      label: 'Unknown',
+      tone: 'neutral',
+      icon: CircleHelp,
+      description: 'No data source reports this yet.',
+      inProgress: false,
+    },
+  },
+
+  /** Installation state reported by a Detect operation (winget list). */
+  installation: {
+    installed: {
+      label: 'Installed',
+      tone: 'success',
+      icon: PackageCheck,
+      description: 'Detected by winget list.',
+      inProgress: false,
+    },
+    not_installed: {
+      label: 'Not installed',
+      tone: 'neutral',
+      icon: PackageX,
+      description: 'winget list did not find it.',
+      inProgress: false,
+    },
+    unknown: {
+      label: 'Unknown',
+      tone: 'neutral',
+      icon: CircleHelp,
+      description: 'Not detected yet. Run Detect to check.',
       inProgress: false,
     },
   },
@@ -156,15 +262,23 @@ export const STATUS_REGISTRY = {
       description: 'Simulated with -WhatIf: nothing was executed.',
       inProgress: false,
     },
+    Skipped: {
+      label: 'Skipped',
+      tone: 'neutral',
+      icon: Ban,
+      description: 'The engine was not confirmed, so nothing ran.',
+      inProgress: false,
+    },
   },
 } as const satisfies Record<string, Record<string, StatusDefinition>>
 
 export type StatusDomain = keyof typeof STATUS_REGISTRY
 export type StatusKey<D extends StatusDomain> = keyof (typeof STATUS_REGISTRY)[D] & string
 
-export type ConnectionStatus = StatusKey<'connection'>
+export type HealthStatus = StatusKey<'health'>
 export type DeploymentRequestStatus = StatusKey<'deploymentRequest'>
 export type EngineResultStatus = StatusKey<'engineResult'>
+export type InstallationStatus = StatusKey<'installation'>
 
 /** Shown when the API sends a value this version of the UI does not know. */
 export const UNKNOWN_STATUS: StatusDefinition = {

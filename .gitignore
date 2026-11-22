@@ -28,3 +28,6 @@ Thumbs.db
 __pycache__/
 
 logs/
+
+# Deployment operation registry (runtime data, Day 5)
+backend/data/

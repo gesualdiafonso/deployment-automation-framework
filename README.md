@@ -37,6 +37,7 @@ The deployment engine is called **DeployForge**: a PowerShell module that reads 
 | PSAppDeployToolkit packages | Planned (`entry_point` values are metadata only) |
 | Endpoint remediation scripts | Planned |
 | FastAPI catalog API (read-only, v0.1.0) | Implemented and tested with pytest |
+| Deployment interface + local PowerShell agent (dry run, detect, confirmed install/uninstall) | Implemented and tested with pytest and Pester; real installs not yet verified in a VM |
 | Deployment requests through the API | Planned |
 | Microsoft Graph / Intune / SCCM integration | Planned |
 
@@ -84,7 +85,7 @@ The architecture separates the control plane from endpoint execution.
 - **Integration layer:** Provides a future extension point for Microsoft Graph and endpoint management platforms.
 - **CI layer:** Validates code quality and tests before changes are merged.
 
-The diagram describes the intended architecture; it does not imply that every component or integration is already operational. Today, the catalog, schema, validator, DeployForge engine, read-only catalog API, and CI are implemented. Authentication, authorization, the deployment orchestrator, and the Graph integration are not.
+The diagram describes the intended architecture; it does not imply that every component or integration is already operational. Today, the catalog, schema, validator, DeployForge engine, read-only catalog API, the local deployment interface and agent ([docs/deployment-agent.md](docs/deployment-agent.md)), and CI are implemented. User authentication, a multi-user deployment orchestrator, and the Graph integration are not.
 
 ## Technology Stack
 
@@ -226,7 +227,7 @@ These scripts are intended for controlled testing in disposable virtual machines
 
 ### 5. REST API (read-only catalog, v0.1.0)
 
-The FastAPI service in `backend/app/` exposes the application catalog over HTTP. It is **read-only**: it only serves `GET` requests, never runs WinGet or PowerShell, and has no authentication in this phase, so it is meant for local or lab use.
+The FastAPI service in `backend/app/` exposes the application catalog over HTTP. The catalog endpoints are **read-only**. The API never runs WinGet or PowerShell: deployments are queued for the separate local agent described in [docs/deployment-agent.md](docs/deployment-agent.md). There is no user authentication in this phase, so it is meant for local or lab use on a single-user machine.
 
 `packages/catalog.json` is the only data source. Every request reads it and validates it against `catalog/schema/catalog.schema.json` (plus the unique-ID rule), so edits to the catalog are served on the next request without restarting. The API and `tools/validate_catalog.py` share the same validation code (`backend/app/core/catalog_validation.py`).
 

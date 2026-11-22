@@ -1,25 +1,29 @@
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+
+import { SOURCE_LABELS } from '@/lib/engine-support'
 
 import type { SourceCount } from '../lib/count-by-source'
 
 export function SourceTypeChart({ data }: { data: readonly SourceCount[] }) {
+  const rows = data.map((entry) => ({ ...entry, label: SOURCE_LABELS[entry.source] }))
   return (
-    <div className="h-56 w-full" role="img" aria-label="Catalog applications per source type">
+    <div className="h-52 w-full" role="img" aria-label="Catalog applications per source">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={[...data]} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-          <CartesianGrid vertical={false} stroke="var(--border)" />
-          <XAxis dataKey="source" tickLine={false} axisLine={false} stroke="var(--muted-foreground)" fontSize={12} />
+        <BarChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: -24 }} barCategoryGap="30%">
+          <XAxis dataKey="label" tickLine={false} axisLine={false} stroke="var(--muted-foreground)" fontSize={12} />
           <YAxis allowDecimals={false} tickLine={false} axisLine={false} stroke="var(--muted-foreground)" fontSize={12} />
           <Tooltip
-            cursor={{ fill: 'var(--muted)' }}
+            cursor={{ fill: 'var(--muted)', radius: 8 }}
             contentStyle={{
               background: 'var(--popover)',
               color: 'var(--popover-foreground)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
+              border: 'none',
+              borderRadius: 12,
+              boxShadow: 'var(--elevation-pop)',
+              fontSize: 12,
             }}
           />
-          <Bar dataKey="count" name="Applications" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="count" name="Applications" fill="var(--chart-1)" radius={[8, 8, 8, 8]} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -2,7 +2,7 @@
 
 Web interface for DeployForge. React 19 + TypeScript + Vite, Tailwind CSS v4, shadcn/ui, Lucide, Recharts, React Router 7 and TanStack Query.
 
-The frontend only talks to the DeployForge API over HTTP. It never runs PowerShell, WinGet or any other process, and it has no deployment operations yet.
+The frontend only talks to the DeployForge API over HTTP. It never runs PowerShell, WinGet or any other process: deployments are previewed, confirmed and queued through the API, and run by the separate local agent (see `docs/deployment-agent.md`).
 
 ## Requirements
 
@@ -36,13 +36,13 @@ Read by Vite at build time. Backend URLs live only in these files, never in `src
 |---|---|---|
 | `VITE_API_BASE_URL` | app | Absolute `http(s)` base URL of the API, or empty for same origin |
 | `VITE_API_TIMEOUT_MS` | app | Request timeout in milliseconds (positive integer) |
-| `VITE_DEV_API_PROXY_TARGET` | `vite.config.ts` | Development only: where `/api/*` and `/health` are proxied |
+| `VITE_DEV_API_PROXY_TARGET` | `vite.config.ts` | Development only: where `/api/*`, `/health`, `/openapi.json`, `/docs` and `/redoc` are proxied |
 
 Files: `.env.development` and `.env.production` are committed defaults; `.env.example` documents every variable; put machine-specific values in `.env.local` / `.env.<mode>.local` (git-ignored).
 
 In development `VITE_API_BASE_URL` is empty, so the browser calls same-origin paths and the Vite proxy forwards them. The API therefore needs no CORS settings for development. A build that calls the API directly (e.g. the future desktop build) sets `VITE_API_BASE_URL=http://127.0.0.1:8000`; that build needs CORS on the API, which is a later step.
 
-Invalid values stop the app at startup with a "DeployForge cannot start" screen listing the problems. `/diagnostics` shows the resolved configuration.
+Invalid values stop the app at startup with a "DeployForge cannot start" screen listing the problems. `/diagnostics` shows the resolved configuration. The API URL cannot be changed from the UI. When it is not a loopback address (127.0.0.1, localhost, [::1]), the Deployment center is disabled: installs are only offered through a local API.
 
 ## Structure
 
@@ -63,15 +63,18 @@ frontend/
     ├── layouts/AppLayout.tsx  Sidebar, header, page error boundary, Suspense loader
     ├── routes/                paths.ts (route constants), navigation.ts (menu), NotFoundPage.tsx
     ├── features/              One folder per screen; feature-specific code stays inside
-    │   ├── dashboard/         API health, catalog total, applications-by-source chart (live data)
-    │   ├── diagnostics/       Resolved config and /health details (live data)
-    │   ├── settings/          Theme selection
-    │   └── catalog/ deployments/ api-explorer/ activity/   Planned (placeholders, no fake data)
+    │   ├── dashboard/         System overview, per-component health, catalog metrics, refresh; unavailable states for data the API does not expose
+    │   ├── diagnostics/       System values with their source, platform capabilities (unsupported vs unavailable), config
+    │   ├── settings/          Theme (persisted), read-only API connection with validation and test, platform, versions, docs
+    │   ├── catalog/           Read-only catalog: search, source/deployment filters, sort by name, details panel (?app=<id>)
+│   ├── api-explorer/      Allow-listed read-only GETs, definitions from /openapi.json, links to /docs, /redoc
+│   ├── deployments/       Deployment center: agent status, detect, preview + confirm, progress, history
+│   └── activity/          Logs & activity: operation history (search, filters, sort, details + audit trail), audit log, log sources
     ├── components/
     │   ├── ui/                shadcn/ui components (button, card, badge, skeleton, separator, sonner)
     │   ├── feedback/          PageLoader, ErrorState, error boundaries, PlannedFeature
     │   ├── theme/             ThemeProvider + context (light / dark / system)
-    │   └── PageHeader, ApiStatusIndicator, ThemeToggle
+    │   └── PageHeader, StatusBadge, ApiStatusIndicator, ThemeToggle
     ├── hooks/                 TanStack Query hooks (use-health, use-applications), use-theme
     ├── services/              API access, no React
     │   ├── api/http-client.ts The only fetch() in the app: base URL, timeout, error mapping

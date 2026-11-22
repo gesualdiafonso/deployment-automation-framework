@@ -73,3 +73,30 @@ export function getConfig(): AppConfig {
   }
   return configResult.config
 }
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+/** True when the URL points at this machine (127.0.0.1, localhost or [::1]). */
+export function isLoopbackUrl(value: string): boolean {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(value).hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Where API requests actually go: VITE_API_BASE_URL, or this page's own origin
+ * when it is empty (development proxy).
+ */
+export function effectiveApiOrigin(config: AppConfig = getConfig()): string {
+  return config.apiBaseUrl || window.location.origin
+}
+
+/**
+ * Deployments run on the machine of the API's agent, so they are only offered
+ * when the API is local. A remote API URL still allows read-only browsing.
+ */
+export function deploymentsAllowed(config: AppConfig = getConfig()): boolean {
+  return isLoopbackUrl(effectiveApiOrigin(config))
+}

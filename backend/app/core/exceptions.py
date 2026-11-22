@@ -146,3 +146,15 @@ async def response_validation_error_handler(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": INTERNAL_ERROR_MESSAGE},
     )
+
+
+DEPLOYMENT_REGISTRY_MESSAGE = "The deployment registry is unavailable."
+
+
+async def deployment_storage_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Registry or audit log failures: generic 500, details only in the server log."""
+    logger.error("Deployment storage error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": DEPLOYMENT_REGISTRY_MESSAGE},
+    )
