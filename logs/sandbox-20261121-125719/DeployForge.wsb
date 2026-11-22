@@ -1,0 +1,20 @@
+<Configuration>
+  <VGpu>Disable</VGpu>
+  <Networking>Enable</Networking>
+  <MemoryInMB>4096</MemoryInMB>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\Users\USUARIO\dev\deployment-automation-framework</HostFolder>
+      <SandboxFolder>C:\DeployForge</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\USUARIO\dev\deployment-automation-framework\logs\sandbox-20261121-125719</HostFolder>
+      <SandboxFolder>C:\DeployForgeOut</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\DeployForge\tools\sandbox\Invoke-SandboxEntry.ps1</Command>
+  </LogonCommand>
+</Configuration>

@@ -1,0 +1,164 @@
+{
+  "operations": [
+    {
+      "operation_id": "7193b236-7fd8-43b7-a5d1-048f7c3e8e7e",
+      "application_id": "7zip",
+      "application_name": "7-Zip",
+      "action": "detect",
+      "mode": null,
+      "state": "completed",
+      "created_at": "2026-11-21T21:52:21.863479+00:00",
+      "claimed_at": "2026-11-21T21:52:21.972129+00:00",
+      "finished_at": "2026-11-21T21:52:28.026421+00:00",
+      "result": {
+        "engine_status": null,
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": false,
+        "message": "7-Zip is not installed.",
+        "engine_operation_id": null,
+        "log_file": null
+      },
+      "error": null
+    },
+    {
+      "operation_id": "8c7f6ac0-f602-44c0-a794-f3d9319ec796",
+      "application_id": "7zip",
+      "application_name": "7-Zip",
+      "action": "detect",
+      "mode": null,
+      "state": "completed",
+      "created_at": "2026-11-21T21:53:08.229827+00:00",
+      "claimed_at": "2026-11-21T21:53:08.485917+00:00",
+      "finished_at": "2026-11-21T21:53:09.347966+00:00",
+      "result": {
+        "engine_status": null,
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": false,
+        "message": "7-Zip is not installed.",
+        "engine_operation_id": null,
+        "log_file": null
+      },
+      "error": null
+    },
+    {
+      "operation_id": "e78e7ebf-65b7-4711-9ad9-c8c1c33490c8",
+      "application_id": "7zip",
+      "application_name": "7-Zip",
+      "action": "install",
+      "mode": "dry_run",
+      "state": "completed",
+      "created_at": "2026-11-21T21:53:12.905188+00:00",
+      "claimed_at": "2026-11-21T21:53:13.417985+00:00",
+      "finished_at": "2026-11-21T21:53:13.563947+00:00",
+      "result": {
+        "engine_status": "DryRun",
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": null,
+        "message": "Dry run: no command was executed.",
+        "engine_operation_id": "6ef34757",
+        "log_file": null
+      },
+      "error": null
+    },
+    {
+      "operation_id": "4dd8ca34-c584-4c58-a1d0-bd8b913c0a2c",
+      "application_id": "7zip",
+      "application_name": "7-Zip",
+      "action": "uninstall",
+      "mode": "execute",
+      "state": "cancelled",
+      "created_at": "2026-11-21T21:54:06.398044+00:00",
+      "claimed_at": null,
+      "finished_at": "2026-11-21T21:54:08.902657+00:00",
+      "result": null,
+      "error": null
+    },
+    {
+      "operation_id": "40a00e0d-3495-4e97-9ede-4581cd606409",
+      "application_id": "git",
+      "application_name": "Git",
+      "action": "detect",
+      "mode": null,
+      "state": "completed",
+      "created_at": "2026-11-21T21:55:07.442289+00:00",
+      "claimed_at": "2026-11-21T21:55:08.047818+00:00",
+      "finished_at": "2026-11-21T21:55:09.080037+00:00",
+      "result": {
+        "engine_status": null,
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": true,
+        "message": "Git is installed.",
+        "engine_operation_id": null,
+        "log_file": null
+      },
+      "error": null
+    },
+    {
+      "operation_id": "f7399887-afcf-4dbd-8039-3c16e26f13f4",
+      "application_id": "git",
+      "application_name": "Git",
+      "action": "uninstall",
+      "mode": "dry_run",
+      "state": "completed",
+      "created_at": "2026-11-21T21:55:11.491122+00:00",
+      "claimed_at": "2026-11-21T21:55:12.140895+00:00",
+      "finished_at": "2026-11-21T21:55:12.305029+00:00",
+      "result": {
+        "engine_status": "DryRun",
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": null,
+        "message": "Dry run: no command was executed.",
+        "engine_operation_id": "c678da7f",
+        "log_file": null
+      },
+      "error": null
+    },
+    {
+      "operation_id": "da41dfda-004a-4c19-9340-caaa54291836",
+      "application_id": "7zip",
+      "application_name": "7-Zip",
+      "action": "detect",
+      "mode": null,
+      "state": "completed",
+      "created_at": "2026-11-21T22:33:20.430587+00:00",
+      "claimed_at": "2026-11-21T22:33:21.100411+00:00",
+      "finished_at": "2026-11-21T22:33:22.620022+00:00",
+      "result": {
+        "engine_status": null,
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": false,
+        "message": "7-Zip is not installed.",
+        "engine_operation_id": null,
+        "log_file": null
+      },
+      "error": null
+    },
+    {
+      "operation_id": "dad14633-a914-49dc-afa6-5da12a73ec7a",
+      "application_id": "7zip",
+      "application_name": "7-Zip",
+      "action": "install",
+      "mode": "dry_run",
+      "state": "completed",
+      "created_at": "2026-11-21T22:33:24.164115+00:00",
+      "claimed_at": "2026-11-21T22:33:24.673338+00:00",
+      "finished_at": "2026-11-21T22:33:24.841589+00:00",
+      "result": {
+        "engine_status": "DryRun",
+        "exit_code": null,
+        "verified": null,
+        "detected_installed": null,
+        "message": "Dry run: no command was executed.",
+        "engine_operation_id": "4d23ebe4",
+        "log_file": null
+      },
+      "error": null
+    }
+  ]
+}

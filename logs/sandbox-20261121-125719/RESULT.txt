@@ -1,0 +1,6 @@
+FAILED before the lifecycle test finished: Deployment failed with HRESULT: 0x80073CF3, Se generaron errores en el paquete para las actualizaciones o la validación de dependencias o de conflictos.
+
+Deployment operation failed.
+
+NOTE: For additional information, look for [ActivityId] 10fa2862-79ae-0000-1c58-fa10ae79dd01 in the Event Log or use the command line Get-AppPackageLog -ActivityID 10fa2862-79ae-0000-1c58-fa10ae79dd01
+
